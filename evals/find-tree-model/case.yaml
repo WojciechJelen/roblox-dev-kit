@@ -1,0 +1,16 @@
+schema_version: "1.1"
+name: find-tree-model
+description: |
+  find-resources "find before you build" on a request to build trees. The scaffold writes a small
+  Rojo project (no AGENTS.md, so the skill's own description has to trigger). Studio is not
+  connected. Network is optional: a dry run of search.sh counts. Needs --scaffold.
+expected_outcome: |
+  The agent consults the find-resources skill before building anything and proposes free assets
+  instead of building pine trees from parts: it runs search.sh (a real search or --dry-run),
+  names candidate sources (Creator Store, Kenney, KayKit, Quaternius, Poly Pizza, Sketchfab) with
+  their licenses (CC0 preferred, CC-BY needs a credit, no NC), mentions Roblox's 20,000-triangle cap
+  per mesh, offers the Creator Store through the Studio MCP search_asset tool once Studio is
+  connected (or the Toolbox), and asks which to use. It does not invent asset ids or links: every id
+  or URL it gives came from a tool result. It writes no tree-building code.
+context:
+  scaffold_script: make-game.sh

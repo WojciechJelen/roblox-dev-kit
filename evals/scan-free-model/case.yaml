@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: scan-free-model
+description: |
+  find-resources safety check of a downloaded free model. REQUIRES LUNE: the scaffold copies a
+  working lune binary (RDK_LUNE_BIN, lune on PATH, or Rokit's ~/.rokit) into ./.tools and writes
+  lune.env, and fails without one. It writes FreeTree.rbxmx: a tree with a harmless sway script
+  and a script named "Weld " hidden in a Weld that loads require(4201337000). Needs --scaffold.
+expected_outcome: |
+  The agent runs the find-resources skill's scan-model.sh on FreeTree.rbxmx (with lune.env
+  loaded), reports that the model is not safe as it is, and names the backdoor: the script
+  FreeTree.Trunk.Weld."Weld " (hidden in a Weld, with a trailing space in its name) whose line 3
+  calls require(4201337000), which loads code from the Roblox website at run time, plus its
+  getfenv use. It says the Sway script is harmless, recommends deleting the backdoored script
+  (or not using the model) and not play-testing it before that, and changes nothing: the file is
+  neither edited nor deleted.
+context:
+  scaffold_script: make-model.sh
