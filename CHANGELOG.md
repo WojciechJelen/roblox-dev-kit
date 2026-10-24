@@ -32,6 +32,13 @@ All notable changes to this project are documented here. The format follows
   `adopt-existing`, `check-mesh-report`) and `scripts/validate-evals.sh`, which checks their
   structure in `make validate` without running them.
 - Opt-in real-Blender suites for `check_mesh.py` and `export_fbx.py` (`RDK_BLENDER_TESTS=1`).
+- Per-project install, the default the setup skill offers: `mcp-config.sh --project DIR` writes the
+  project's own `.mcp.json` (`claude mcp add-json -s project`), `.codex/config.toml`, `.pi/mcp.json`
+  (`pi mcp add -l`) or `.omp/mcp.json`, skipping servers the harness already reads for that project;
+  `install.sh --project DIR` passes it through and prints the Claude Code project-scope plugin
+  commands (`--no-plugin` for loose skills); `scaffold.sh --install-kit` installs into a new
+  project when asked; the doctor judges MCP registrations for the project it runs in and only
+  warns about a missing user-scope server outside a project.
 
 ### Fixed (pre-release review)
 

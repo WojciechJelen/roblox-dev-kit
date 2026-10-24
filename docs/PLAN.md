@@ -26,6 +26,12 @@ Use these; do not re-derive or guess. Everything below was checked on this machi
 
 `~/.agents/skills/` exists and already holds many skills → it is the shared install target for Codex, pi and OMP.
 
+**Project scope** (checked 2026-10-24 for the per-project install; the user installs skills, plugins and MCP servers per project, never at user scope):
+- Claude Code: `claude mcp add-json -s project` writes `.mcp.json` in the **current directory** (a subdirectory gets its own; checked with a scratch `HOME`/`CLAUDE_CONFIG_DIR`). `claude plugin marketplace add <src> --scope user|project|local` and `claude plugin install <p> --scope user|project|local` exist (`--help`); project scope writes `.claude/settings.json` (`extraKnownMarketplaces`, `enabledPlugins` `"roblox@roblox-dev-kit": true`), local `.claude/settings.local.json` (https://code.claude.com/docs/en/plugins/loading.md, cli-reference.md). Project-scope plugins load after the workspace trust dialog; their MCP servers and a project `.mcp.json` need one-time per-server approval.
+- Codex: project `.codex/config.toml` with `[mcp_servers.<name>]`, loaded only for **trusted** projects, closest file wins (learn.chatgpt.com/docs/config-file/config-basic, /docs/extend/mcp). `codex mcp add` has no scope option and writes the user config only → the kit writes the project TOML itself.
+- pi: `pi mcp add <name> -l` writes `.pi/mcp.json` in the current directory; pi reads it only after the project is trusted (`pi mcp add --help`, checked with a scratch `HOME`).
+- OMP: project `.omp/mcp.json` (native), plus the default imports of `./.mcp.json` and `./.codex/config.toml` (above). No CLI → JSON written with jq.
+
 **OMP MCP imports** (OMP `docs/settings.md`, `docs/mcp-config.md`, `model-settings.ts`): OMP reads its native `mcp.json` first, then other tools' configs; across sources the first definition of a name wins and duplicates are not merged. *Project-level* sources (`<project>/.mcp.json`, `<project>/.codex/config.toml`, `.claude/.mcp.json`) are imported by default unless `mcp.enableProjectConfig: false`. *Foreign user-level* sources (`~/.claude.json`, `~/.codex/config.toml`, Claude Code's user plugin registry) are imported only when `enabledProviders` in `~/.omp/agent/config.yml` lists them (`claude`, `codex`, `*`/`all`; default `[]`; `claude` also enables `claude-plugins`; a set `CLAUDE_CONFIG_DIR` opts Claude in); `disabledProviders` wins. This machine's `config.yml` has no `enabledProviders`, so OMP does **not** see the Claude/Codex `Roblox_Studio` entries.
 
 ### Roblox Studio
@@ -149,7 +155,7 @@ Why vendor: `npx skills add`, Codex, pi and OMP install skill folders individual
 1. **toolchain** — `install-toolchain.sh [--project DIR | --global | --rokit-only] [--trust]`: install Rokit 1.2.0 via its official installer if missing (no no-modify-path option exists, so the installer runs with a throwaway `HOME` and the real `ROKIT_ROOT`, §1), then `rokit install` in the project (or `rokit add --global` for a global toolchain when no project). `--trust` first records trust with `rokit trust <owner/repo>...` (needed without a TTY; the agent asks the user). Prints the PATH line the user must add; **never edits `~/.zshrc`/`~/.bashrc`**.
 2. **new** — `scaffold.sh <dir> <name>`: copy `assets/template`, substitute `{{PROJECT_NAME}}`, `git init` if not a repo, generate `sourcemap.json` if rojo is available. Refuses to overwrite a non-empty dir unless `--force`.
 3. **adopt** — `adopt.sh <dir> --mapping <tsv>`: for an existing project with loose scripts (e.g. Motor Rivals: `src/Factory.lua → ReplicatedStorage.RivalsFactory (ModuleScript)`). The **agent** writes the mapping file (from README/Studio tree); the **script** turns it into `default.project.json` + moves/renames files (`.server.lua` / `.client.lua` / ModuleScript rules). Keeps `.lua` extensions as-is. Dry-run by default, `--apply` to execute.
-4. **mcp** — `mcp-config.sh --harness <h>`: registers servers per §5 using the harness's own CLI when it exists (`claude mcp add-json`, `codex mcp add`, `pi mcp add`), writing JSON only for OMP. Idempotent: skips servers the harness already gets under the expected name (including OMP imports, §5). Warms uv's cache after registering `blender` (`--no-warm` skips). `--dry-run` prints what it would do.
+4. **mcp** — `mcp-config.sh --harness <h> [--project DIR]`: registers servers per §5 using the harness's own CLI when it has the scope (`claude mcp add-json -s user|project`, `codex mcp add` for user scope, `pi mcp add [-l]`), else writing the file (OMP JSON; Codex project TOML). Project CLI calls run in DIR. Idempotent: skips servers the harness already gets under the expected name from any scope it reads for the project (including the roblox plugin and OMP imports, §5). Warms uv's cache after registering `blender` (`--no-warm` skips). `--dry-run` prints what it would do.
 5. **blender** — `setup-blender.sh`: download `mcp-<ver>.zip` (pinned, sha256 checked), install with `Blender --background --python-exit-code 1 --python-expr` using `bpy.ops.extensions.package_install_files(filepath=…, repo='user_default', enable_on_install=True, overwrite=True)` (verified on 5.2.1, §1), enable Auto Start in the add-on preferences (optionally "Allow Online Access" with `--allow-online-access`) and save prefs; create `~/.local/bin/blender` symlink if `blender` not on PATH; warm uv's cache for the server. Refuse if Blender < 5.1 or while Blender is running. Warn if the community `blender-mcp` add-on is also installed (port clash).
 6. Finish: run `roblox-doctor`'s `doctor.sh` (if the sibling skill is installed) or print the equivalent checklist. **Setup is done when doctor is green.**
 
@@ -198,7 +204,7 @@ Each check: `id`, `section`, `status` (`ok|warn|fail|skip`), `detail`, `fix` (hu
 | project (only if `default.project.json` found upward) | `rokit.toml`, `wally.toml`, `.luaurc`, `selene.toml`, `stylua.toml` present (warn); `Packages/` present when wally.toml has deps (warn); `sourcemap.json` newer than newest `src/**` file (warn); git repo (warn); `rojo serve` listening on 34872 (info → `ok`/`skip` with detail) |
 | studio | Studio app installed (fail); StudioMCP binary found (fail); Rojo Studio plugin in `~/Documents/Roblox/Plugins` (warn); Studio running (info) |
 | blender | `blender` on PATH (fail; fix = symlink into `~/.local/bin`); version ≥ 5.1 (fail; official add-on needs it); official add-on dir present under `<ext dir>/user_default/mcp` (confirmed by a real install) (fail); add-on TCP port reachable (warn: "Blender not running or Auto Start off"); community add-on also installed (warn: port clash); uvx can resolve the server — only with `RDK_NETWORK_TESTS=1`/`--online` (skip otherwise) |
-| mcp | for each **installed** harness: `Roblox_Studio` registered (fail), `blender` registered or plugin enabled (fail); duplicates (warn). Harness not installed → `skip` |
+| mcp | for each **installed** harness, judged for the project found upward (or `--project`): `Roblox_Studio` registered, `blender` registered or plugin enabled — user config or the project's files; missing → fail inside a project, warn outside one (per-project registration is the default); duplicates (warn). Harness not installed → `skip` |
 | cloud | `ROBLOX_API_KEY` set (warn; never print value); `ROBLOX_CREATOR_TYPE`/`ROBLOX_CREATOR_ID` set (warn) |
 
 `--fix` applies only safe, idempotent fixes: blender symlink, `rokit install`, `wally install`, `rojo sourcemap`, `rojo plugin install`, `mkdir ~/.local/bin`. It never edits shell rc files or harness config files (that is `mcp-config.sh`'s job, invoked explicitly).
@@ -214,8 +220,8 @@ Each check: `id`, `section`, `status` (`ok|warn|fail|skip`), `detail`, `fix` (hu
 
 ## 8. Other-harness adapter — `install/install.sh`
 
-`install.sh --harness codex|pi|omp|claude|all [--project <dir>] [--copy] [--dry-run]`
-- Default: symlink each `skills/<name>` into `~/.agents/skills/<name>` (Codex + pi + OMP) — `--harness claude` → `~/.claude/skills/`; `--project <dir>` → `<dir>/.agents/skills/` (and `.claude/skills/` for claude).
+`install.sh --harness codex|pi|omp|claude|all [--project <dir>] [--no-plugin] [--copy] [--no-warm] [--dry-run]`
+- Default: symlink each `skills/<name>` into `~/.agents/skills/<name>` (Codex + pi + OMP) — `--harness claude` → `~/.claude/skills/`; `--project <dir>` → `<dir>/.agents/skills/`, MCP via `mcp-config.sh --project <dir>`, and for Claude Code the printed project-scope plugin commands (Studio's server only in `.mcp.json`); `--no-plugin` links `<dir>/.claude/skills/` and registers both servers instead.
 - `--copy` copies instead of symlinking (for machines where the repo won't stay).
 - Then calls `mcp-config.sh --harness <h>` for each harness, printing what changed.
 - `uninstall.sh` removes only links/copies that point into this repo.
@@ -272,6 +278,13 @@ Windows support beyond path stubs; roblox-ts; publishing/CI for the *game* beyon
 - The template's `AGENTS.md` and `references/stack.md` said "about 20k triangles … 1 stud ≈ 0.28 m"; they now state the documented limit and that 1 Blender unit = 1 stud with FBX Unit Scale (0.28 m is the physics unit).
 - §1 said every summary tool has a `_for_cli` variant; `get_objects_summary` and `get_object_detail_summary` do not (corrected there).
 - The doctor already had the `cloud` section; it is unchanged.
+
+Per-project install (added after Phase 2 at the user's request: skills, plugins and MCP servers per project, never at user scope):
+- `mcp-config.sh --project DIR`, `install.sh --project DIR` passing it through, `scaffold.sh --install-kit[=HARNESS]` (explicit only), and a project-aware doctor. User scope stays the default of the scripts; the setup skill asks and defaults to the project.
+- `lib/common.sh` gained `RDK_PROJECT_DIR` (default `$PWD`): every project-level lookup (Claude local scope and `.mcp.json`, project plugin settings, Codex `.codex/config.toml`, pi `.pi/mcp.json`, OMP `.omp/mcp.json` and imports) reads that directory. The doctor sets it to the detected project; outside a project a missing server is a warning instead of a failure.
+- For Claude Code in project mode the installer prints the plugin commands instead of running them (they change the shared `.claude/settings.json` and add a marketplace that records the kit's local path), and registers only Studio's server, because the plugin bundles Blender's.
+- Project files get no `.bak` copies (they live in the user's repository); the Codex project TOML is appended, never rewritten.
+- `validate-skills.sh` accepts script names from the kit's `install/` folder, which the setup skill now names as optional.
 
 Review fix pass (Phase 2):
 - `export_fbx.py` shows and unlocks hidden or unselectable targets during the export (Blender's exporter writes only `context.selected_objects`) and asserts the selection; excluded collections are a usage error. Re-importing the FBX in a fresh Blender is now the standard assertion of the export tests.

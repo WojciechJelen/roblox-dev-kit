@@ -3,6 +3,43 @@
 Walk the user through these after the scripts have run. Give one step at a time and wait for
 confirmation; most happen in a GUI the agent cannot see.
 
+## Per-project install
+
+The default: everything the kit adds for agents lives in the game's own folder (`<dir>`).
+
+| Harness | Skills | MCP servers | What the user confirms |
+|---|---|---|---|
+| Claude Code | the `roblox` plugin at project scope | `<dir>/.mcp.json` (Studio; the plugin brings Blender) | the workspace trust dialog, then each server from `.mcp.json` once |
+| Codex | `<dir>/.agents/skills/` | `<dir>/.codex/config.toml` | trusting the project (Codex skips project `.codex/` files otherwise) |
+| pi | `<dir>/.agents/skills/` | `<dir>/.pi/mcp.json` | trusting the project on the first start there |
+| Oh My Pi | `<dir>/.agents/skills/` | `<dir>/.omp/mcp.json`, or imported from `.mcp.json` / `.codex/config.toml` | nothing extra |
+
+1. `<kit>/install/install.sh --harness all --project <dir>` (try `--dry-run` first). For a new game,
+   `scaffold.sh <dir> "<Name>" --install-kit` does the same right after scaffolding.
+2. Claude Code: the installer prints two commands. The user runs them from `<dir>` (or agrees to the
+   agent running them):
+
+   ```sh
+   claude plugin marketplace add <kit> --scope project
+   claude plugin install roblox@roblox-dev-kit --scope project
+   ```
+
+   Project scope writes `<dir>/.claude/settings.json` (`extraKnownMarketplaces`, `enabledPlugins`),
+   which is committed and reaches everyone who clones the repository; `--scope local` writes
+   `.claude/settings.local.json` for this user only. A project-scope plugin loads after the
+   workspace trust dialog, and its MCP servers need the same one-time approval as a project
+   `.mcp.json` (https://code.claude.com/docs/en/plugins/loading.md, checked 2026-10-24). The
+   marketplace is recorded with the kit's local path, so collaborators need the kit at that path
+   until it is published to GitHub.
+3. Start each harness in `<dir>` and accept its trust prompt; restart or reload as the installer
+   says. Then run the doctor from `<dir>`: inside a project it counts the project's files and fails
+   only when a server is registered nowhere the harness reads for that project.
+
+User scope is the alternative: the same commands without `--project` (and `claude plugin install`
+without `--scope`) put skills in `~/.agents/skills/` or `~/.claude/skills/` and servers in each
+harness's user config. Outside a project the doctor reports a missing user-scope server as a warning,
+because a per-project registration is fine.
+
 ## PATH lines
 
 The scripts never edit shell profiles. When one prints a line such as

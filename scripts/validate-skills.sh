@@ -81,10 +81,12 @@ for skill_md in "$ROOT"/skills/*/SKILL.md; do
     [ -e "$dir/$ref" ] || fail "references missing file: $ref"
   done
 
-  # Script names mentioned in prose must exist in this skill or a sibling skill.
+  # Script names mentioned in prose must exist in this skill, a sibling skill, or the kit's own
+  # install/ folder (which a skill may only point at as optional: copied skill folders lack it).
   while IFS= read -r script; do
     [ -n "$script" ] || continue
-    ls "$ROOT"/skills/*/scripts/"$script" >/dev/null 2>&1 || fail "mentions $script, which no skill ships"
+    [ -f "$ROOT/install/$script" ] || ls "$ROOT"/skills/*/scripts/"$script" >/dev/null 2>&1 ||
+      fail "mentions $script, which no skill ships"
   done <<<"$(grep -oE '[a-z][a-z0-9_-]*\.sh' "$skill_md" | sort -u)"
 
   for script in "$dir"/scripts/*.sh; do

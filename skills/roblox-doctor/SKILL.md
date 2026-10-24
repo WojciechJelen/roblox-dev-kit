@@ -41,6 +41,12 @@ table back unless asked. Group fixes by who does them:
   server, "Allow Online Access" in Blender, creating an Open Cloud API key. Give the exact steps.
 
 Points that are easy to get wrong:
+- MCP registrations are judged for the project the doctor runs in (found upward from the current
+  directory, or `--project DIR`): the user config plus the project's own files (`.mcp.json` and a
+  project-scope `roblox` plugin in `.claude/settings.json`, `.codex/config.toml`, `.pi/mcp.json`,
+  `.omp/mcp.json`). Inside a project a server registered nowhere visible fails; outside any project
+  it is only a warning, because per-project registration is the kit's default. Run the doctor from
+  the game's folder before calling an MCP setup broken.
 - `mcp.<harness>.studio` failing for a harness the user does not use is noise; say so and move on.
 - For Oh My Pi a server counts as registered when OMP would import it: from `./.mcp.json` or
   `./.codex/config.toml` by default, and from the Claude Code / Codex user configs only when its

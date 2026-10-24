@@ -29,7 +29,32 @@ can also be run by hand (each script has `--help`, most have `--dry-run`).
 
 ## Install
 
-### Claude Code
+### Per project (recommended)
+
+Everything goes into the game's own folder, so each project carries its agent setup in its
+repository and nothing changes for other projects:
+
+```sh
+install/install.sh --harness all --project path/to/game --dry-run   # look first
+install/install.sh --harness all --project path/to/game
+```
+
+- Codex, pi and Oh My Pi: skills in `game/.agents/skills/`; MCP servers in the project's
+  `.codex/config.toml`, `.pi/mcp.json` and `.omp/mcp.json` (Oh My Pi also imports the first two).
+- Claude Code: the script prints the project-scope plugin commands to run from the game folder,
+  `claude plugin marketplace add /path/to/roblox-dev-kit --scope project` and
+  `claude plugin install roblox@roblox-dev-kit --scope project` (they write `.claude/settings.json`),
+  and puts Roblox Studio's server in `.mcp.json`; the plugin brings the Blender server. `--no-plugin`
+  links loose skills into `.claude/skills/` instead.
+- A new game: `skills/roblox-setup/scripts/scaffold.sh path/to/game "My Game" --install-kit`.
+- MCP only: `skills/roblox-setup/scripts/mcp-config.sh --harness <h> --project path/to/game`.
+
+Codex and pi read project MCP files only once you trust the project, and Claude Code asks once to
+approve servers from a project `.mcp.json`. Run the doctor from inside the project to check it.
+
+The sections below install at user scope instead.
+
+### Claude Code (user scope)
 
 ```sh
 claude plugin marketplace add /path/to/roblox-dev-kit    # or the GitHub repository once published
@@ -46,7 +71,7 @@ longer than MCP clients wait. Run the setup skill's Blender step (or
 `uvx --from "git+https://projects.blender.org/lab/blender_mcp.git@v1.0.3#subdirectory=mcp" blender-mcp --help`)
 once before the first session; `setup-blender.sh` and `mcp-config.sh` do this for you.
 
-### Codex CLI, pi, Oh My Pi
+### Codex CLI, pi, Oh My Pi (user scope)
 
 ```sh
 install/install.sh --harness codex     # or pi, omp, all
@@ -56,7 +81,7 @@ This symlinks each skill into `~/.agents/skills/` (all three harnesses read it) 
 MCP servers with that harness's own CLI (`codex mcp add`, `pi mcp add`) or, for Oh My Pi, in
 `~/.omp/agent/mcp.json`. Oh My Pi imports project-level `.mcp.json` / `.codex/config.toml` by
 default but the Claude Code and Codex *user* configs only when its `enabledProviders` setting lists
-them; servers it already imports are not added again. Options: `--project DIR` installs into `DIR/.agents/skills/` instead,
+them; servers it already imports are not added again. Options: `--project DIR` (see above),
 `--copy` copies instead of linking, `--no-mcp` skips MCP registration, `--dry-run` shows what would
 happen. `install/uninstall.sh` removes only what this repo installed.
 

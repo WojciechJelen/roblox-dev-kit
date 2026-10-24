@@ -24,7 +24,36 @@ If the sibling `roblox-doctor` skill is installed, run
 there is one, and plan from its failures. Otherwise check the same things by hand as you go. Setup is done
 when the doctor has no failures.
 
-## 2. Pick the modes
+## 2. Choose the scope: per project (default) or user
+
+Skills, the Claude Code plugin and the MCP servers can be installed into one project or for the
+whole user account. If the user has not said which, ask, and default to the project: a per-project
+install lives in the game's repository, works the same for everyone who clones it, and changes
+nothing for other projects. Details and the trust prompts each harness shows are in
+[references/manual-steps.md](references/manual-steps.md#per-project-install).
+
+The kit's root is two levels above this skill's real folder: `KIT=$(cd -P "$SKILL_DIR/../.." && pwd)`
+(`$KIT/install/install.sh` exists in a checkout, a symlinked install and the plugin; a copied skill
+folder has only `mcp-config.sh`).
+
+- **Per project** (`<dir>` is the game's folder):
+  - `"$KIT/install/install.sh" --harness all --project <dir>` links the skills into
+    `<dir>/.agents/skills/` (Codex, pi, Oh My Pi) and registers the MCP servers in the project's
+    own files: `.codex/config.toml`, `.pi/mcp.json`, `.omp/mcp.json` (`--dry-run` first).
+  - Claude Code gets the `roblox` plugin at project scope. The installer prints the two commands;
+    show them to the user and run them only with their agreement, from `<dir>`:
+    `claude plugin marketplace add "$KIT" --scope project` and
+    `claude plugin install roblox@roblox-dev-kit --scope project`. They write
+    `<dir>/.claude/settings.json`; `--scope local` keeps the plugin to this user. Studio's server
+    goes into `<dir>/.mcp.json` (the plugin brings Blender's). `--no-plugin` links loose skills into
+    `<dir>/.claude/skills/` and puts both servers in `.mcp.json` instead.
+  - MCP only: `mcp-config.sh --harness <h> --project <dir>`.
+  - Codex and pi read project MCP files only after the user trusts the project; Claude Code asks
+    once to approve servers from a project `.mcp.json`. Tell the user to expect that.
+- **User scope** (the alternative): the same commands without `--project`; skills go to
+  `~/.agents/skills/` or `~/.claude/skills/`, servers to each harness's user config.
+
+## 3. Pick the modes
 
 | Situation | Mode |
 |---|---|
@@ -53,6 +82,9 @@ and show the dry run first when one exists.
 Wally, StyLua/Selene/luau-lsp config, GitHub Actions CI, `AGENTS.md` and `CLAUDE.md`. It refuses a
 non-empty directory unless `--force`. The folder ↔ DataModel mapping is in
 [references/template-layout.md](references/template-layout.md).
+Right after scaffolding, offer the per-project install so the new game is ready for any harness:
+`scaffold.sh <dir> "<Project Name>" --install-kit` (or `--install-kit=codex` for one harness) runs
+`install.sh --harness all --project <dir>`. It is never done without the flag; ask first.
 
 ### adopt
 For a game that already exists, the DataModel paths must stay the same so that nothing breaks.
@@ -68,8 +100,9 @@ The generated project uses one node per script; the reasons are in
 [references/template-layout.md](references/template-layout.md#adopted-projects).
 
 ### mcp
-`mcp-config.sh --harness claude|codex|pi|omp|all [--dry-run]` registers, at user scope and only when
-the harness does not already get them from somewhere:
+`mcp-config.sh --harness claude|codex|pi|omp|all [--project DIR] [--dry-run]` registers, in the
+project's own files with `--project` (the default choice, see section 2) or else at user scope, and
+only when the harness does not already get them from somewhere it reads for that project:
 - `Roblox_Studio`: Studio's own server. Studio's Quick connect already uses this name in Claude Code
   and Codex; never add a second Studio server under another name, or every tool shows up twice.
 - `blender`: the official Blender MCP server, pinned to 1.0.3. For Claude Code with the `roblox`
@@ -97,7 +130,7 @@ cache (`--no-warm` skips that when offline). Blender must be closed.
 - Tell the user plainly that the Blender MCP server runs model-written Python inside Blender with no
   sandbox, so they should keep backups of scenes they connect it to.
 
-## 3. Finish
+## 4. Finish
 
 Run the doctor again and fix what it reports. Then walk the user through whatever only a person can do,
 from [references/manual-steps.md](references/manual-steps.md): install the Rojo Studio plugin, turn on
