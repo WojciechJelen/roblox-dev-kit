@@ -95,5 +95,21 @@ All notable changes to this project are documented here. The format follows
   JSON-encoded tool input; `validate-evals.sh` also checks `execution:` keys; the README shows
   `--allow-tools Bash Write`.
 - The export tests re-import every FBX in a fresh Blender and compare the objects.
+- `scan-model.sh` no longer stalls on long words (two alias patterns were quadratic: a 5 MB line
+  never finished); every pattern is linear, `require` floods are one finding, and a CPU budget
+  (`RDK_SCAN_BUDGET`) stops any scan with exit 2.
+- `scan-model.sh` catches the loader's common disguises: `require(-(-id))`, `select`, a table index,
+  `(require)(id)`, `{require}`, calls split over lines, a variable set to the id,
+  `"Http".."Service"` and `pcall(HS.GetAsync, ...)`; `require` used as a value is `require-value`.
+- `fetch.sh` unpacks zip members with `unzip -p`, so a symlink member can no longer land in the
+  asset folder (it pointed a "ColorMap" at `/etc/passwd`); links, folders and members over 200 MB
+  are refused, member names with `[`, `*` or `?` unpack, and a set without a color map is refused.
+- `fetch.sh` downloads Poly Haven's packed `arm` map when a set has no `Metal` map and explains how
+  to split the metalness channel, instead of dropping metalness silently.
+- `fetch.sh` and `credit.sh` strip control characters from names; `fetch.sh` refuses ids that do
+  not start with a letter or digit and removes the old files when a set is downloaded again at
+  another resolution; `credit.sh` adds rows inside the table even when text follows it.
+- `search.sh` marks a source failed when its answer has an unexpected shape, instead of breaking
+  the summary; Sketchfab links use the bare uid.
 - `RDK_ROJO_PORT` and `RDK_UVX` are overridable, so tests never depend on a running `rojo serve`
   or the real uvx; the kit's CI authenticates Rokit before downloading tools.

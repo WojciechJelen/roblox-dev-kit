@@ -556,15 +556,17 @@ challenge, in a headless Chrome through DevTools), and the answers the tests rep
   (`https://ambientcg.com/get?file=...`) redirects to `acg-download.struffelproductions.com`, so
   downloads use `curl -L`. 3D models have `LQ-`/`SQ-`/`HQ-<res>-JPG` zips; `LQ-1K-JPG` of
   3DTreeStump001 holds an `.obj`, `.mtl`, Color, NormalGL, NormalDX and AO.
-- `fetch.sh`: Poly Haven's `arm` (AO/roughness/metal packed into one image) is **not** downloaded,
-  because SurfaceAppearance takes separate grayscale maps; `Metal` is, when the set has one.
+- `fetch.sh`: Poly Haven's `Metal` map is downloaded when the set has one; otherwise the packed
+  `arm` map (AO red, roughness green, metalness blue), with a note on splitting its blue channel
+  (see the review fixes below; at first `arm` was skipped).
   Poly Haven **models are refused** with the reason (pine_tree_01: 17,427,094 polys, the 1k FBX is
   648 MB; only 358 of 521 models are under 20,000) and HDRIs are refused (Roblox skies are six
   images). ambientCG **3D models are supported** through the `LQ-<res>-JPG` zip, keeping the `.obj`
   and `.mtl`; `_Opacity` maps are kept too (atlases, decals). Checks: Poly Haven's `md5` and size,
   ambientCG's zip size; files are staged and moved only when all arrived. Extra options `--credits
-  FILE` and `--force`. Zip members are extracted one by one with `unzip -j`, only names that start
-  with `<id>_`; paths with `..`, absolute paths and backslashes are skipped with a warning. API calls
+  FILE` and `--force`. Zip members are extracted one by one with `unzip -p` (review fixes below),
+  only names that start with `<id>_`; paths with `..`, absolute paths, backslashes, links and
+  folders are skipped with a warning. API calls
   use `curl -sS -m 20`; file downloads `--connect-timeout 20 -m 900` (20 s would cut off the 5-10 MB
   zips on a slow line). For sketchfab/freesound/roblox/pixabay/polypizza it prints the manual steps
   and exits 1 (nothing was downloaded).
@@ -595,7 +597,7 @@ challenge, in a headless Chrome through DevTools), and the answers the tests rep
   `category:Music subcategory:"Solo instrument"`). `https://freesound.org/s/<id>/` redirects to the
   sound page.
 - Scanner extras: `linked-source` (high; a non-empty `LinkedSource`, which Lune reads as a string),
-  `require-alias` (medium), `AssetService:LoadAssetAsync` with `insert-service`, and
+  `require-value` (medium; first `require-alias`), `AssetService:LoadAssetAsync` with `insert-service`, and
   `game:HttpGet`/`HttpPost` with `http`, because Roblox's Creator Store rules name them
   (https://create.roblox.com/docs/production/creator-store: getfenv/setfenv, `require(assetId)`,
   `loadstring()`, `InsertService:LoadAsset()`, `AssetService:LoadAssetAsync()`,
@@ -669,5 +671,56 @@ challenge, in a headless Chrome through DevTools), and the answers the tests rep
   documented as triangles, so the 20,000 comparison is a hint, and `check_mesh.py` decides.
 - Kenney, KayKit and Quaternius license terms are taken from §14.1, not re-read.
 - The two eval cases were validated (`scripts/validate-evals.sh`) but not run: they are paid model
-  runs. The Linux CI job was not run; the scripts use `md5sum`/`md5`, `unzip -Z1`/`-j` (Info-ZIP) and
-  `find -mmin`, which ubuntu-latest has, and the zip-building tests need python3.
+  runs. The Linux CI job was not run; the scripts use `md5sum`/`md5`, `unzip -Z1`/`-Z`/`-p` (Info-ZIP)
+  and `find -mmin`, which ubuntu-latest has, and the zip-building tests need python3.
+
+**Review fixes (after the Fable 5.1 review, 2026-10-24)**
+
+Each fix has a regression test in `tests/find-resources.bats`; the scanner fixtures `evasive.rbxmx`
+and `legit.rbxmx` come from the reviewer's samples.
+
+- High: the scanner's two HttpService-alias patterns started with an unanchored `([%a_][%w_]*)`,
+  quadratic on long words (20 KB: 9.7 s, 40 KB: 39 s, 5 MB: never finished, before the long-line
+  rule could report it). They start with `%f[%w_]` now; call arguments are read at most 2,000
+  characters ahead; `Prompt%a*Purchase` and `LoadAsset%a*` match in a 120-character window; a
+  `require` flood (over 5,000 in a script) is one finding; and a CPU budget (`RDK_SCAN_BUDGET`,
+  default 120 s) stops any scan with exit 2. Measured after the fix: 5 MB line 1.7 s, the review's
+  18 MB model 7 s.
+- `fetch.sh` used `unzip -j`, which recreates symlink members on macOS: a `<id>_1K-JPG_Color.jpg ->
+  /etc/passwd` member landed in the asset folder as the ColorMap. Members are now written with
+  `unzip -p` (bytes only), links and folders are skipped by their type in `unzip -Z`, the staging
+  folder is checked for links, and a texture set without a color map is refused. Member names are
+  passed with `[`, `*` and `?` bracket-escaped (unzip reads them as patterns), each must unpack to
+  its listed size, and members over 200 MB (`RDK_MAX_ZIP_MEMBER`) are refused.
+- Scanner evasions that passed as clean: `require(-(-id))`, `require(select(1, id))`,
+  `require(({id})[1])`, `(require)(id)`, `{require}`, multi-line calls, `local id = <n>` then
+  `require(id)`, `"Http".."Service"`, `pcall(HS.GetAsync, HS, url)`. The require checks now run over
+  the whole source: a 4+ digit (or hex) number anywhere in the argument, `require(name)` where the
+  script sets `name` to such a number, and `require` next to a 6+ digit number when used as a value
+  are high; `require` used as a value is medium (`require-value`, replacing `require-alias`);
+  `select(...)` and table indexing count as computed. HTTP: an alias's method used as a value is
+  high; `:GetAsync(` on an unknown object (an HttpService request or a DataStore read) and
+  `PostAsync`/`RequestAsync` without HttpService in sight are medium; a service name built with
+  `..` is a medium `service-name` finding. Of the review's 69 samples, every evasion is now high or
+  medium, every legitimate sample stays clean; `rawget(_G, "require")(id)` is still not recognised
+  (documented in `references/safety.md`).
+- `search.sh`: an answer jq could not read left an empty results file, the summary failed with
+  "Cannot iterate over null" and the source vanished from `--json`. Every parse goes through
+  `accept()`, which keeps only a JSON array and otherwise marks the source failed with jq's reason;
+  Sketchfab's `license` and `user` are read as objects or strings.
+- Poly Haven metal sets without a `Metal` map (5 of the first 8 metal sets, checked live:
+  blue_metal_plate and green_metal_rust have none, corrugated_iron has one) came out non-metallic
+  silently. `fetch.sh` now downloads `arm` for any set without `Metal`, records it in `SOURCE.json`
+  as `ARM (ambient occlusion R, roughness G, metalness B)` with `metal` true or false (Poly Haven's
+  "metal" category), and prints the ImageMagick (`magick in.jpg -channel B -separate out.png`) or
+  Blender (Separate Color) step for metal sets.
+- Control characters (terminal escapes) in API names reached the terminal and `CREDITS.md`; both
+  scripts strip them. Ids must start with a letter or digit (`polyhaven:.` was accepted).
+- `--force` at another `--res` left the old files beside the new ones; the files the previous
+  `SOURCE.json` lists are removed first. `credit.sh` inserts a row after the table's last row
+  instead of after any text that follows the table.
+- Sketchfab page links are `https://sketchfab.com/3d-models/<uid>` (301 to the titled page) instead
+  of `viewerUrl`, whose slug is `none-<uid>` for titles without Latin letters. Docs: every Studio
+  MCP call needs a `studio_id` from `list_roblox_studios`; ambientCG's docs list `3DModel` but only
+  `3D-Model` filters; Sketchfab's `free-st`, `st` and `ed` store licenses
+  (`GET https://api.sketchfab.com/v3/licenses`) show as "other: ..." under `--license any`.
