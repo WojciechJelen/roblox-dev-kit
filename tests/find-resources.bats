@@ -493,6 +493,31 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [ "$(jq -c '.findings' <<<"$output")" = "[]" ]
 }
 
+@test "scan: evasive loaders and web requests are found, each in its own script" {
+  require_lune
+  run --separate-stderr bash "$SCAN" "$FIX/evasive.rbxmx" --json
+  [ "$status" -eq 1 ]
+  for s in NegNeg Select TableIndex ParenRequire MultiLine NewlineCall NumberVariable PcallRequire; do
+    [ "$(jq -r --arg s "Evasive.$s" '[.findings[] | select(.script == $s and .rule == "require-id" and .severity == "high")] | length' <<<"$output")" -ge 1 ] ||
+      { echo "no high require-id in $s"; false; }
+  done
+  [ "$(jq -r '.findings[] | select(.script == "Evasive.TableAlias") | "\(.severity) \(.rule)"' <<<"$output")" = "medium require-value" ]
+  [ "$(jq -r '[.findings[] | select(.script == "Evasive.SplitService") | "\(.severity) \(.rule)"] | join(",")' <<<"$output")" = "medium service-name,medium http" ]
+  [ "$(jq -r '.findings[] | select(.script == "Evasive.PcallGetAsync") | "\(.severity) \(.rule) \(.line)"' <<<"$output")" = "high http 2" ]
+  [ "$(jq -r '.findings[] | select(.script == "Evasive.MultiLine") | .line' <<<"$output")" = 1 ]
+  [ "$(jq -r '.findings[] | select(.script == "Evasive.NumberVariable") | .line' <<<"$output")" = 2 ]
+  # every script has at least one finding
+  [ "$(jq -r '[.findings[].script] | unique | length' <<<"$output")" -eq "$(jq -r '.scripts | length' <<<"$output")" ]
+}
+
+@test "scan: ordinary requires, package paths and look-alike names stay clean" {
+  require_lune
+  run bash "$SCAN" "$FIX/legit.rbxmx"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"15 script(s)"* ]]
+  [[ "$output" == *"No suspicious patterns found."* ]]
+}
+
 @test "scan: --max-line flags long lines; a place file is scanned too" {
   require_lune
   run bash "$SCAN" "$FIX/benign.rbxmx" --max-line 40
@@ -556,6 +581,19 @@ EOF
   [[ "$output" == *"the scan stopped after 0 s of work"*"Treat it as unsafe."* ]]
   RDK_SCAN_BUDGET=soon run bash "$SCAN" "$FIX/backdoor.rbxmx"
   [ "$status" -eq 2 ]
+}
+
+@test "scan: thousands of requires in one script are reported once as a flood" {
+  require_lune
+  {
+    printf '<roblox version="4"><Item class="Model" referent="RBX0"><Properties><string name="Name">Gen</string></Properties>'
+    printf '<Item class="ModuleScript" referent="RBX1"><Properties><string name="Name">Loader</string><ProtectedString name="Source"><![CDATA['
+    for _ in $(seq 1 5001); do printf 'local m = require(script.M)\n'; done
+    printf ']]></ProtectedString></Properties></Item></Item></roblox>\n'
+  } >"$BATS_TEST_TMPDIR/flood.rbxmx"
+  run --separate-stderr bash "$SCAN" "$BATS_TEST_TMPDIR/flood.rbxmx" --json
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.findings[] | "\(.severity) \(.rule) \(.line)"' <<<"$output")" = "high require-flood 5001" ]
 }
 
 @test "scan: unreadable input and usage errors exit 2" {

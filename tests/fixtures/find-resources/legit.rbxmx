@@ -1,0 +1,133 @@
+<roblox version="4">
+  <Item class="Model" referent="RBX0">
+    <Properties>
+      <string name="Name">Legit</string>
+    </Properties>
+    <Item class="Script" referent="RBX1">
+      <Properties>
+        <string name="Name">Module</string>
+        <ProtectedString name="Source"><![CDATA[local M = require(script.Module)
+print(M)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX2">
+      <Properties>
+        <string name="Name">Packages</string>
+        <ProtectedString name="Source"><![CDATA[local Promise = require(game:GetService("ReplicatedStorage").Packages.Promise)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX3">
+      <Properties>
+        <string name="Name">WaitForChild</string>
+        <ProtectedString name="Source"><![CDATA[local Signal = require(game.ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Signal"))]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="LocalScript" referent="RBX4">
+      <Properties>
+        <string name="Name">LocalPlayer</string>
+        <ProtectedString name="Source"><![CDATA[local p = game.Players.LocalPlayer
+print(p)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX5">
+      <Properties>
+        <string name="Name">NotLoadstring</string>
+        <ProtectedString name="Source"><![CDATA[local loadstringEnabled = false
+local function myloadstring(x) return x end]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX6">
+      <Properties>
+        <string name="Name">ThenField</string>
+        <ProtectedString name="Source"><![CDATA[local speed = require(script.Parent.Config).Speed * 2]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX7">
+      <Properties>
+        <string name="Name">FindFirstChild</string>
+        <ProtectedString name="Source"><![CDATA[local M = require(script.Parent:FindFirstChild("Mod"))]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX8">
+      <Properties>
+        <string name="Name">ServerStorage</string>
+        <ProtectedString name="Source"><![CDATA[local M = require(game.ServerStorage.Modules.Util)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX9">
+      <Properties>
+        <string name="Name">DigitInName</string>
+        <ProtectedString name="Source"><![CDATA[local Mod2 = require(script.Mod2)
+local Pkg1234 = require(script.Pkg1234)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX10">
+      <Properties>
+        <string name="Name">StringRequire</string>
+        <ProtectedString name="Source"><![CDATA[local x = require("@self/Module")]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX11">
+      <Properties>
+        <string name="Name">SpaceBeforeParen</string>
+        <ProtectedString name="Source"><![CDATA[local Config = require (script.Parent.Config)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX12">
+      <Properties>
+        <string name="Name">NotFenv</string>
+        <ProtectedString name="Source"><![CDATA[local widgetfenvelope = 1]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX13">
+      <Properties>
+        <string name="Name">StringLib</string>
+        <ProtectedString name="Source"><![CDATA[local a = string.find(s, "x")
+local b = s:rep(2)
+local nl = string.char(10)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX14">
+      <Properties>
+        <string name="Name">UrlComment</string>
+        <ProtectedString name="Source"><![CDATA[-- see https://create.roblox.com/docs for details
+print(1)]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX15">
+      <Properties>
+        <string name="Name">ManyPackages</string>
+        <ProtectedString name="Source"><![CDATA[local M0 = require(game:GetService("ReplicatedStorage").Packages.Pkg0)
+local M1 = require(game:GetService("ReplicatedStorage").Packages.Pkg1)
+local M2 = require(game:GetService("ReplicatedStorage").Packages.Pkg2)
+local M3 = require(game:GetService("ReplicatedStorage").Packages.Pkg3)
+local M4 = require(game:GetService("ReplicatedStorage").Packages.Pkg4)
+local M5 = require(game:GetService("ReplicatedStorage").Packages.Pkg5)
+local M6 = require(game:GetService("ReplicatedStorage").Packages.Pkg6)
+local M7 = require(game:GetService("ReplicatedStorage").Packages.Pkg7)
+local M8 = require(game:GetService("ReplicatedStorage").Packages.Pkg8)
+local M9 = require(game:GetService("ReplicatedStorage").Packages.Pkg9)
+local M10 = require(game:GetService("ReplicatedStorage").Packages.Pkg10)
+local M11 = require(game:GetService("ReplicatedStorage").Packages.Pkg11)
+local M12 = require(game:GetService("ReplicatedStorage").Packages.Pkg12)
+local M13 = require(game:GetService("ReplicatedStorage").Packages.Pkg13)
+local M14 = require(game:GetService("ReplicatedStorage").Packages.Pkg14)
+local M15 = require(game:GetService("ReplicatedStorage").Packages.Pkg15)
+local M16 = require(game:GetService("ReplicatedStorage").Packages.Pkg16)
+local M17 = require(game:GetService("ReplicatedStorage").Packages.Pkg17)
+local M18 = require(game:GetService("ReplicatedStorage").Packages.Pkg18)
+local M19 = require(game:GetService("ReplicatedStorage").Packages.Pkg19)
+local M20 = require(game:GetService("ReplicatedStorage").Packages.Pkg20)
+local M21 = require(game:GetService("ReplicatedStorage").Packages.Pkg21)
+local M22 = require(game:GetService("ReplicatedStorage").Packages.Pkg22)
+local M23 = require(game:GetService("ReplicatedStorage").Packages.Pkg23)
+local M24 = require(game:GetService("ReplicatedStorage").Packages.Pkg24)
+local M25 = require(game:GetService("ReplicatedStorage").Packages.Pkg25)
+local M26 = require(game:GetService("ReplicatedStorage").Packages.Pkg26)
+local M27 = require(game:GetService("ReplicatedStorage").Packages.Pkg27)
+local M28 = require(game:GetService("ReplicatedStorage").Packages.Pkg28)
+local M29 = require(game:GetService("ReplicatedStorage").Packages.Pkg29)]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

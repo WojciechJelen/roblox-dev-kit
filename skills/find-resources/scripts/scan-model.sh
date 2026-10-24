@@ -13,14 +13,16 @@ usage() {
 usage: scan-model.sh FILE [--json] [--max-line N]
 
 Lists every script in FILE (full name, class, enabled, run context, lines, bytes) and reports:
-  high    require(<asset id>) or require() of a computed value, getfenv/setfenv, loadstring,
-          string.char() chains, long \\ddd escape runs, string.reverse decoders, obfuscator
-          markers (Luraph, IronBrew, MoonSec, PSU), HttpService GetAsync/PostAsync/RequestAsync,
-          a LinkedSource, lines longer than --max-line characters
+  high    require() of an asset id (also hidden in arithmetic, select, a table, a variable set
+          to a number, or split over lines) or of a computed value, getfenv/setfenv,
+          loadstring, string.char() chains, long \\ddd escape runs, string.reverse decoders,
+          obfuscator markers (Luraph, IronBrew, MoonSec, PSU), HttpService GetAsync/PostAsync/
+          RequestAsync, a LinkedSource, lines longer than --max-line characters
   medium  purchase prompts (MarketplaceService:Prompt*Purchase), TeleportService,
-          InsertService:LoadAsset, AssetService:LoadAssetAsync, ScriptContext, require kept in
-          a variable, scripts inside a Sound, Decal, Texture, Weld, Attachment, Motor6D or value
-          object, script names with leading/trailing spaces or non-ASCII characters
+          InsertService:LoadAsset, AssetService:LoadAssetAsync, ScriptContext, require used as
+          a value, GetAsync on an unknown object, service names built with "..", scripts inside
+          a Sound, Decal, Texture, Weld, Attachment, Motor6D or value object, script names with
+          leading/trailing spaces or non-ASCII characters
 
   --json        print one JSON object: file, instances, verdict, summary, scripts, findings
   --max-line N  lines longer than N characters count as obfuscated (default 500)

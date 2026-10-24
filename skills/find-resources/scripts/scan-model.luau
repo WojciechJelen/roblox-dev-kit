@@ -147,55 +147,21 @@ local function countMatches(text: string, pattern: string): number
 end
 
 -- Line rules ----------------------------------------------------------------------------------
--- Each returns a message when the line matches, or nil.
+-- Each returns a message when the line matches (and, optionally, a severity other than the rule's
+-- own), or nil.
 
-type LineRule = { rule: string, severity: string, check: (line: string, context: { [string]: any }) -> string? }
+type LineRule = {
+	rule: string,
+	severity: string,
+	check: (line: string, context: { [string]: any }) -> (string?, string?),
+}
+
+local HTTP_METHODS = { "GetAsync", "PostAsync", "RequestAsync" }
+local HTTP_MESSAGE = "HttpService request to the internet: it can download code or send data out"
 
 local OBFUSCATORS = { "luraph", "ironbrew", "moonsec", "prometheus obfuscator", "synapse xen" }
 
 local lineRules: { LineRule } = {
-	{
-		rule = "require-id",
-		severity = "high",
-		check = function(line)
-			local start = 1
-			while true do
-				local s, e = string.find(line, "%f[%w_]require%s*%(", start)
-				if s == nil then
-					return nil
-				end
-				local arg = callArgument(line, e :: number)
-				if arg ~= nil then
-					local bare = withoutStrings(arg)
-					if string.match(arg, "^%s*%(?%s*%d") or string.match(arg, "^%s*tonumber%s*%(") then
-						return "require() of an asset id loads code from the Roblox website when the game runs (the classic backdoor loader)"
-					end
-					if
-						string.find(bare, "%.%.")
-						or string.find(bare, "[%+%*/%^%%]")
-						or string.find(bare, "%f[%w_]string%.")
-						or string.find(bare, "%f[%w_]math%.")
-						or string.find(bare, "%f[%w_]getfenv")
-						or string.find(bare, "%f[%w_]tonumber")
-						or string.find(arg, "^%s*[\"']%s*%d+%s*[\"']")
-					then
-						return "require() of a computed value hides which module (or asset id) it loads"
-					end
-				end
-				start = (e :: number) + 1
-			end
-		end,
-	},
-	{
-		rule = "require-alias",
-		severity = "medium",
-		check = function(line)
-			if string.find(line, "=%s*require%s*$") or string.find(line, "=%s*require%s*[;,%)]") then
-				return "require is stored in a variable, which hides what the script loads"
-			end
-			return nil
-		end,
-	},
 	{
 		rule = "getfenv",
 		severity = "high",
@@ -285,22 +251,39 @@ local lineRules: { LineRule } = {
 			-- game:GetService("HttpService"):GetAsync(...)
 			local method = string.match(line, "HttpService[\"']%s*%)%s*[:.]%s*(%a+Async)%s*%(")
 			if method == "GetAsync" or method == "PostAsync" or method == "RequestAsync" then
-				return "HttpService request to the internet: it can download code or send data out"
-			end
-			for alias in context.httpAliases do
-				if
-					string.find(line, alias .. "%s*[:.]%s*GetAsync%s*%(")
-					or string.find(line, alias .. "%s*[:.]%s*PostAsync%s*%(")
-					or string.find(line, alias .. "%s*[:.]%s*RequestAsync%s*%(")
-				then
-					return "HttpService request to the internet: it can download code or send data out"
-				end
-			end
-			if context.mentionsHttp and (string.find(line, ":%s*PostAsync%s*%(") or string.find(line, ":%s*RequestAsync%s*%(")) then
-				return "HttpService request to the internet: it can download code or send data out"
+				return HTTP_MESSAGE
 			end
 			if string.find(line, "GetAsync%s*%(%s*[\"']https?://") then
 				return "HTTP GET of a web address: it can download code"
+			end
+			-- obj:GetAsync(...), obj.GetAsync used as a value (pcall(HS.GetAsync, HS, url)), and so on.
+			local found: string?, severity: string? = nil, nil
+			for _, m in HTTP_METHODS do
+				for obj, after in string.gmatch(line, "%f[%w_]([%a_][%w_]*)%s*[.:]%s*" .. m .. "%f[^%w_]%s*(.?)") do
+					if context.httpAliases[obj] then
+						return HTTP_MESSAGE
+					elseif after ~= "(" then
+						found, severity = m .. " used as a value (for example passed to pcall): an HttpService request in disguise", "medium"
+					elseif m == "GetAsync" then
+						found = found or "GetAsync: an HttpService request to the internet or a DataStore read; check which"
+						severity = severity or "medium"
+					elseif context.mentionsHttp then
+						return HTTP_MESSAGE
+					else
+						found = found or m .. ": a web request method of HttpService; check which object it is called on"
+						severity = severity or "medium"
+					end
+				end
+			end
+			return found, severity
+		end,
+	},
+	{
+		rule = "service-name",
+		severity = "medium",
+		check = function(line)
+			if matchAt(line, "GetService", "^GetService%s*%([^%)]*%.%.") or matchAt(line, "game", "^game%s*%[[^%]]*%.%.") then
+				return "a service name built from pieces (\"Http\"..\"Service\") hides which service the script uses"
 			end
 			return nil
 		end,
@@ -370,6 +353,136 @@ local function add(severity: string, rule: string, inst: Instance, line: number?
 	})
 end
 
+-- require ------------------------------------------------------------------------------------
+-- Checked over the whole source rather than line by line, so that calls split over lines
+-- (require\n(4201337000)) are seen too.
+
+type Reporter = (severity: string, rule: string, line: number, excerpt: string?, message: string) -> ()
+
+-- No real script calls require this often; past it the code is generated (and the pass stops).
+local MAX_REQUIRES = 5000
+
+local REQUIRE_ID = "require() of an asset id loads code from the Roblox website when the game runs (the classic backdoor loader)"
+
+-- Names this script assigns an asset-id-like number (4+ digits) or such a number in quotes.
+local function numericNames(source: string): { [string]: boolean }
+	local names: { [string]: boolean } = {}
+	for _, pattern in {
+		"%f[%w_]([%a_][%w_]*)%s*=%s*[%-%+%(%s]*%d%d%d%d",
+		"%f[%w_]([%a_][%w_]*)%s*=%s*[%-%(%s]*0[xX]%x",
+		"%f[%w_]([%a_][%w_]*)%s*=%s*[\"']%s*%d%d%d%d",
+		"%f[%w_]([%a_][%w_]*)%s*:%s*number%s*=%s*[%-%+%(%s]*%d",
+	} do
+		for name in string.gmatch(source, pattern) do
+			names[name] = true
+		end
+	end
+	return names
+end
+
+-- What a require call's argument text says, or nil when it looks like a module path.
+local function judgeRequireArgument(arg: string, numeric: { [string]: boolean }): (string?, string?)
+	local bare = withoutStrings(arg)
+	if string.find(arg, "%f[%w_]%d%d%d%d") or string.find(arg, "%f[%w_]0[xX]%x") or string.match(arg, "^%s*%(?%s*%d") then
+		return "require-id", REQUIRE_ID
+	end
+	if string.match(arg, "^%s*tonumber%s*%(") then
+		return "require-id", REQUIRE_ID
+	end
+	local name = string.match(arg, "^%s*([%a_][%w_]*)%s*$")
+	if name ~= nil and numeric[name] then
+		return "require-id", "require(" .. name .. ") where " .. name .. " is set to a number: loads code from the Roblox website (backdoor loader)"
+	end
+	if
+		string.find(bare, "%.%.")
+		or string.find(bare, "[%+%-%*/%^%%]")
+		or string.find(bare, "%f[%w_]string%.")
+		or string.find(bare, "%f[%w_]math%.")
+		or string.find(bare, "%f[%w_]getfenv")
+		or string.find(bare, "%f[%w_]select%s*%(")
+		or string.find(bare, "[{%[]")
+	then
+		return "require-computed", "require() of a computed value hides which module (or asset id) it loads"
+	end
+	return nil, nil
+end
+
+local function scanRequires(source: string, report: Reporter)
+	if not string.find(source, "require", 1, true) then
+		return
+	end
+	local numeric = numericNames(source)
+	-- Line numbers for positions found in increasing order, counted incrementally, and each line's
+	-- end looked up once: both stay linear however many times "require" appears.
+	local line, lineStart, lineEnd = 1, 1, (string.find(source, "\n", 1, true) or (#source + 1))
+	local function locate(pos: number): (number, string)
+		while pos > lineEnd do
+			line += 1
+			lineStart = lineEnd + 1
+			lineEnd = string.find(source, "\n", lineStart, true) or (#source + 1)
+		end
+		return line, string.sub(source, lineStart, math.min(lineEnd - 1, lineStart + 300))
+	end
+
+	local start, seen = 1, 0
+	while true do
+		local s, e = string.find(source, "%f[%w_]require%f[^%w_]", start)
+		if s == nil then
+			return
+		end
+		start = e + 1
+		seen += 1
+		if seen % 1000 == 0 then
+			checkBudget()
+		end
+		if seen > MAX_REQUIRES then
+			local lineNo, excerpt = locate(s)
+			report("high", "require-flood", lineNo, excerpt, string.format("require appears more than %d times: generated or obfuscated code", MAX_REQUIRES))
+			return
+		end
+		local before = string.match(string.sub(source, math.max(1, s - 40), s - 1), "(%S)%s*$")
+		if before ~= "." and before ~= ":" then -- obj.require / obj:require are someone else's functions
+			local _, spaceEnd = string.find(source, "^%s*", e + 1)
+			local nextPos = (spaceEnd or e) + 1
+			local nextChar = string.sub(source, nextPos, nextPos)
+			local lineNo, excerpt = locate(s)
+			local rule: string?, message: string? = nil, nil
+			if nextChar == "(" then
+				local arg = callArgument(source, nextPos)
+				if arg ~= nil then
+					rule, message = judgeRequireArgument(arg, numeric)
+				end
+			elseif nextChar == "\"" or nextChar == "'" then
+				-- require "4201337000" (a call without parentheses)
+				local _, content = string.match(string.sub(source, nextPos, nextPos + MAX_ARGUMENT), "^([\"'])(.-)%1")
+				if content ~= nil and string.match(content, "^%s*%d+%s*$") then
+					rule, message = "require-id", REQUIRE_ID
+				end
+			elseif nextChar == ")" and before == "(" then
+				-- (require)(4201337000)
+				local _, parenEnd = string.find(source, "^%)%s*%(", nextPos)
+				local arg = if parenEnd then callArgument(source, parenEnd) else nil
+				if arg ~= nil then
+					rule, message = judgeRequireArgument(arg, numeric)
+				end
+				if rule == nil then
+					rule, message = "require-value", "require used as a value ((require), {require}, pcall(require, ...)) hides what the script loads"
+				end
+			elseif nextChar ~= "[" and nextChar ~= "{" then
+				-- local r = require, {require}, pcall(require, id): require handed around as a value.
+				if string.find(excerpt, "%f[%w_]%d%d%d%d%d%d") then
+					rule, message = "require-id", "require used as a value next to an asset-id-like number (pcall(require, id) and the like)"
+				else
+					rule, message = "require-value", "require used as a value ((require), {require}, pcall(require, ...)) hides what the script loads"
+				end
+			end
+			if rule ~= nil and message ~= nil then
+				report(if rule == "require-value" then "medium" else "high", rule, lineNo, excerpt, message)
+			end
+		end
+	end
+end
+
 local function scanScript(inst: Instance)
 	local source: string = (inst :: any).Source or ""
 	local info: ScriptInfo = {
@@ -413,11 +526,27 @@ local function scanScript(inst: Instance)
 	end
 	local context = { httpAliases = httpAliases, mentionsHttp = string.find(source, "HttpService") ~= nil }
 
-	local longLines, firstLong, firstLongLength = 0, 0, 0
-	local lineNumber = 0
-	-- At most MAX_PER_RULE findings per rule and script; the last one says how many lines it stands for.
+	-- At most MAX_PER_RULE findings per rule and script, one per line; the last one says how many
+	-- more lines it stands for.
 	local hits: { [string]: number } = {}
 	local lastFinding: { [string]: Finding } = {}
+	local lastLine: { [string]: number } = {}
+	local function report(severity: string, rule: string, line: number, excerpt: string?, message: string)
+		if lastLine[rule] == line then
+			return
+		end
+		lastLine[rule] = line
+		hits[rule] = (hits[rule] or 0) + 1
+		if hits[rule] <= MAX_PER_RULE then
+			add(severity, rule, inst, line, excerpt, message)
+			lastFinding[rule] = findings[#findings]
+		end
+	end
+
+	scanRequires(source, report)
+
+	local longLines, firstLong, firstLongLength = 0, 0, 0
+	local lineNumber = 0
 	for _, raw in string.split(source, "\n") do
 		lineNumber += 1
 		if lineNumber % 500 == 0 then
@@ -431,13 +560,9 @@ local function scanScript(inst: Instance)
 			end
 		end
 		for _, rule in lineRules do
-			local message = rule.check(line, context)
+			local message, severity = rule.check(line, context)
 			if message ~= nil then
-				hits[rule.rule] = (hits[rule.rule] or 0) + 1
-				if hits[rule.rule] <= MAX_PER_RULE then
-					add(rule.severity, rule.rule, inst, lineNumber, line, message)
-					lastFinding[rule.rule] = findings[#findings]
-				end
+				report(severity or rule.severity, rule.rule, lineNumber, line, message)
 			end
 		end
 	end

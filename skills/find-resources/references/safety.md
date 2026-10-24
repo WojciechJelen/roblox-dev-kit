@@ -42,8 +42,9 @@ no Lune, or a scan stopped by the budget.
 
 | Severity | Rule | Pattern | Why |
 |---|---|---|---|
-| high | `require-id` | `require(<digits>)`, `require(tonumber(...))` | Loads a module from the website at run time: the classic loader |
-| high | `require-computed` | `require(...)` of a concatenation, arithmetic, `string.*`, `math.*`, `getfenv`, or a quoted number | Hides which asset is loaded |
+| high | `require-id` | `require(...)` whose argument holds a 4+ digit number or a hex number anywhere (`require(-(-4201337000))`, `require(select(1, ...))`, `require(({...})[1])`, `require("4201337000")`), `require(tonumber(...))`, `require(id)` where the script sets `id` to such a number, `(require)(<id>)`, and `require` passed as a value on a line with a 6+ digit number (`pcall(require, <id>)`). Calls split over lines count too | Loads a module from the website at run time: the classic loader |
+| high | `require-computed` | `require(...)` of a concatenation, arithmetic, `string.*`, `math.*`, `getfenv`, `select(...)`, or a table index | Hides which asset is loaded |
+| high | `require-flood` | `require` more than 5,000 times in one script | Generated or obfuscated code |
 | high | `linked-source` | a script whose `LinkedSource` is set | Its code comes from another asset |
 | high | `getfenv` | `getfenv`, `setfenv` | Rewrites the environment, used to hide `require` and `loadstring` |
 | high | `loadstring` | `loadstring` | Runs code from a string (needs `LoadStringEnabled`, which backdoors ask for) |
@@ -51,13 +52,15 @@ no Lune, or a scan stopped by the budget.
 | high | `escape-run` | 8+ `\ddd` or `\xHH` escapes in a row | Hidden text |
 | high | `string-reverse` | `string.reverse`, `:reverse(` | Common decoder for hidden ids and URLs |
 | high | `obfuscator` | Luraph, IronBrew, MoonSec, PSU, Prometheus, Synapse Xen markers | Obfuscated code cannot be reviewed |
-| high | `http` | `HttpService` `GetAsync`/`PostAsync`/`RequestAsync` (also through a local alias or `game:GetService("HttpService"):...`), `GetAsync("http...")`, `HttpGet`/`HttpPost` | Downloads code or sends data out; `game:HttpGet` exists only in exploit tools |
+| high | `http` | `HttpService` `GetAsync`/`PostAsync`/`RequestAsync` (also through a local alias, `game.HttpService` or `game:GetService("HttpService"):...`, and `pcall(HS.GetAsync, HS, url)`), `GetAsync("http...")`, `PostAsync`/`RequestAsync` in a script that names HttpService, `HttpGet`/`HttpPost` | Downloads code or sends data out; `game:HttpGet` exists only in exploit tools |
 | high | `long-line` | a line longer than `--max-line` (default 500) characters | Minified or obfuscated code |
 | medium | `purchase-prompt` | `Prompt...Purchase(` | Sells the author's products in your game |
 | medium | `teleport` | `TeleportService` | Sends players to another place |
 | medium | `insert-service` | `LoadAsset(`, `LoadAssetAsync(`, `LoadAssetVersion(` | Loads another asset by id while the game runs |
 | medium | `script-context` | `ScriptContext` | Watches or hides script errors |
-| medium | `require-alias` | `= require` stored in a variable | Hides what is loaded |
+| medium | `http` | `:GetAsync(` on anything else (an HttpService request or a DataStore read), `PostAsync`/`RequestAsync` without HttpService in sight, and these methods used as values | A web request may hide behind an unknown name |
+| medium | `service-name` | `GetService(...)` or `game[...]` with a name built by `..` (`"Http".."Service"`) | Hides which service is used |
+| medium | `require-value` | `require` used as a value: `local r = require`, `(require)`, `{require}`, `pcall(require, ...)` | Hides what is loaded |
 | medium | `odd-parent` | a script inside a Sound, Decal, Texture, Weld, Attachment, Motor6D or value object | Hiding place: nobody opens those |
 | medium | `odd-name` | an empty script name, leading or trailing spaces, control or non-ASCII characters | Names made to look like "Weld" or "Script" |
 
@@ -69,8 +72,14 @@ The excerpt shown is the matching line with control characters replaced and cut 
 - **Admin and framework loaders** (for example the loaders of well-known admin systems) use
   `require(<asset id>)` on purpose. That is still remote code the author can change at any time:
   only keep it when the user chose that system and the id matches its official documentation.
-- **Comments and strings** are scanned like code, so `-- never use loadstring` is a finding. Read
-  the line.
+- **Comments and strings** are scanned like code, so `-- never use loadstring` or
+  `print("require(123)")` is a finding. Read the line.
+- **DataStores** read with `:GetAsync(key)`, which is also an HttpService method, so a script with a
+  DataStore gets a medium `http` finding. Check that the object is a DataStore.
+- `require(script.Parent.Modules["Loader" .. n])` builds a child name and counts as
+  `require-computed`; read what it can load.
+- `rawget(_G, "require")(id)` and similar lookups through tables are not recognised; the review
+  checklist below still applies.
 - **Minified libraries** (JSON or compression modules) trip `long-line`; `--max-line 2000` shows
   whether anything else is there.
 - **Lobby and hub games** use `TeleportService`; **donation boards** use purchase prompts. Check the
