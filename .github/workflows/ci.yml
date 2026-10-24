@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    name: Checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install shellcheck, jq and bats
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install shellcheck jq
+          else
+            sudo apt-get update && sudo apt-get install -y shellcheck jq
+          fi
+          npm install -g bats@1.13.0
+
+      - name: Vendored copies are in sync
+        run: make check-sync
+
+      - name: Lint (shellcheck, JSON)
+        run: make lint
+
+      - name: Validate skills
+        run: make validate
+
+      - name: Tests (bats)
+        run: make test
+
+  template:
+    # Downloads Rokit and the pinned tools, so it depends on GitHub's API; allowed to fail.
+    name: Template builds with the pinned toolchain
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      GITHUB_PAT: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Scaffold and install the toolchain
+        run: |
+          skills/roblox-setup/scripts/scaffold.sh "$RUNNER_TEMP/game" "CI Game" --no-git
+          skills/roblox-setup/scripts/install-toolchain.sh --project "$RUNNER_TEMP/game" --trust
+          echo "$HOME/.rokit/bin" >> "$GITHUB_PATH"
+
+      - name: Format, lint, type check and build the template
+        working-directory: ${{ runner.temp }}/game
+        run: |
+          stylua --check src
+          selene src
+          wally install
+          rojo sourcemap default.project.json -o sourcemap.json
+          curl -fsSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau
+          luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json --definitions=@roblox=globalTypes.d.luau src
+          rojo build default.project.json -o build.rbxl
+
+      - name: Doctor sees the toolchain and project
+        run: skills/roblox-doctor/scripts/doctor.sh --section toolchain,project --project "$RUNNER_TEMP/game"
