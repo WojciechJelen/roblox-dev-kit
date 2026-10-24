@@ -33,10 +33,23 @@ type ScriptInfo = {
 local path = process.args[1]
 local format = process.args[2] or "table"
 local maxLine = tonumber(process.args[3] or "500") or 500
+-- CPU seconds the scan may take. Every pattern is linear, so a normal model needs well under a
+-- second; a file built to stall scanners stops here instead of hanging.
+local budget = tonumber(process.args[4] or "120") or 120
+local started = os.clock()
+
+-- Longest call argument read after a "(" (a call that does not close within it is not parsed).
+local MAX_ARGUMENT = 2000
 
 local function fail(message: string): never
 	stdio.ewrite("error: " .. message .. "\n")
 	return process.exit(2)
+end
+
+local function checkBudget()
+	if os.clock() - started > budget then
+		fail(string.format("the scan stopped after %g s of work: %s is too large or built to slow scanners down. Treat it as unsafe.", budget, path))
+	end
 end
 
 if path == nil or path == "" then
@@ -87,7 +100,7 @@ end
 -- parentheses do not close on this line.
 local function callArgument(line: string, open: number): string?
 	local depth = 0
-	for i = open, #line do
+	for i = open, math.min(#line, open + MAX_ARGUMENT) do
 		local c = string.sub(line, i, i)
 		if c == "(" then
 			depth += 1
@@ -99,6 +112,24 @@ local function callArgument(line: string, open: number): string?
 		end
 	end
 	return nil
+end
+
+-- matchAt LINE LITERAL PATTERN: whether PATTERN (anchored, starting with LITERAL) matches at any
+-- occurrence of LITERAL, looking at most WINDOW characters ahead. A pattern such as
+-- "Prompt%a*Purchase" tried from every position would backtrack over long words.
+local WINDOW = 120
+local function matchAt(line: string, literal: string, pattern: string): boolean
+	local start = 1
+	while true do
+		local s = string.find(line, literal, start, true)
+		if s == nil then
+			return false
+		end
+		if string.find(string.sub(line, s, s + WINDOW), pattern) then
+			return true
+		end
+		start = s + 1
+	end
 end
 
 local function withoutStrings(text: string): string
@@ -278,7 +309,7 @@ local lineRules: { LineRule } = {
 		rule = "purchase-prompt",
 		severity = "medium",
 		check = function(line)
-			if string.find(line, "Prompt%a*Purchase%s*%(") then
+			if matchAt(line, "Prompt", "^Prompt%a*Purchase%s*%(") then
 				return "prompts players to buy something: check that the product or game pass is yours"
 			end
 			return nil
@@ -298,7 +329,7 @@ local lineRules: { LineRule } = {
 		rule = "insert-service",
 		severity = "medium",
 		check = function(line)
-			if string.find(line, "LoadAsset%a*%s*%(") then
+			if matchAt(line, "LoadAsset", "^LoadAsset%a*%s*%(") then
 				return "InsertService:LoadAsset or AssetService:LoadAssetAsync loads another asset by id while the game runs"
 			end
 			return nil
@@ -373,10 +404,11 @@ local function scanScript(inst: Instance)
 	end
 
 	local httpAliases: { [string]: boolean } = { HttpService = true }
-	for alias in string.gmatch(source, "([%a_][%w_]*)%s*=%s*game%s*:%s*GetService%s*%(%s*[\"']HttpService[\"']%s*%)") do
+	-- %f[%w_] anchors each try at the start of a word; without it a long word is matched in O(n²).
+	for alias in string.gmatch(source, "%f[%w_]([%a_][%w_]*)%s*=%s*game%s*:%s*GetService%s*%(%s*[\"']HttpService[\"']%s*%)") do
 		httpAliases[alias] = true
 	end
-	for alias in string.gmatch(source, "([%a_][%w_]*)%s*=%s*game%s*%.%s*HttpService") do
+	for alias in string.gmatch(source, "%f[%w_]([%a_][%w_]*)%s*=%s*game%s*%.%s*HttpService") do
 		httpAliases[alias] = true
 	end
 	local context = { httpAliases = httpAliases, mentionsHttp = string.find(source, "HttpService") ~= nil }
@@ -388,6 +420,9 @@ local function scanScript(inst: Instance)
 	local lastFinding: { [string]: Finding } = {}
 	for _, raw in string.split(source, "\n") do
 		lineNumber += 1
+		if lineNumber % 500 == 0 then
+			checkBudget()
+		end
 		local line = string.gsub(raw, "\r$", "")
 		if #line > maxLine then
 			longLines += 1
@@ -448,6 +483,7 @@ end
 
 local function visit(inst: Instance)
 	instanceCount += 1
+	checkBudget()
 	if inst:IsA("LuaSourceContainer") then
 		scanScript(inst)
 	end

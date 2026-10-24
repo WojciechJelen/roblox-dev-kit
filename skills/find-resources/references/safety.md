@@ -35,7 +35,10 @@ scripts. Scripts the model does not need are deleted, not just disabled.
 
 `scan-model.sh` lists every `LuaSourceContainer` (full name, class, enabled, run context, lines,
 bytes) and checks each line of each script. Nothing in the file is run: Lune only parses it.
-Exit 0 means nothing was found, 1 findings, 2 a usage error, an unreadable file or no Lune.
+Every pattern runs in time proportional to the script's length (an 18 MB model takes seconds), and
+a scan that needs more than `RDK_SCAN_BUDGET` seconds of work (default 120) stops: treat such a
+file as unsafe. Exit 0 means nothing was found, 1 findings, 2 a usage error, an unreadable file,
+no Lune, or a scan stopped by the budget.
 
 | Severity | Rule | Pattern | Why |
 |---|---|---|---|

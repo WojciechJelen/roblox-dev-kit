@@ -25,8 +25,9 @@ Lists every script in FILE (full name, class, enabled, run context, lines, bytes
   --json        print one JSON object: file, instances, verdict, summary, scripts, findings
   --max-line N  lines longer than N characters count as obfuscated (default 500)
 
-Needs Lune (lune on PATH, ~/.rokit/bin/lune, or RDK_LUNE_BIN). Exit codes: 0 nothing found,
-1 findings (verdict review or unsafe), 2 usage error, unreadable file or no Lune.
+Needs Lune (lune on PATH, ~/.rokit/bin/lune, or RDK_LUNE_BIN). A scan that takes more than
+RDK_SCAN_BUDGET seconds of work (default 120) stops with exit 2. Exit codes: 0 nothing found,
+1 findings (verdict review or unsafe), 2 usage error, unreadable file, no Lune or scan stopped.
 EOF
 }
 
@@ -74,7 +75,9 @@ if ! lune=$(rdk_find_lune); then
 fi
 
 status=0
-"$lune" run "$SCRIPT_DIR/scan-model.luau" "$file" "$format" "$max_line" || status=$?
+budget=${RDK_SCAN_BUDGET:-120}
+case $budget in '' | *[!0-9]*) usage_error "RDK_SCAN_BUDGET must be a whole number of seconds" ;; esac
+"$lune" run "$SCRIPT_DIR/scan-model.luau" "$file" "$format" "$max_line" "$budget" || status=$?
 case $status in
   0 | 1 | 2) exit $status ;;
   *)

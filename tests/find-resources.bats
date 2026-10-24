@@ -538,6 +538,26 @@ EOF
   [[ "$(jq -r '.findings[0].message' <<<"$output")" == *"rbxassetid://987654321"* ]]
 }
 
+@test "scan: a 200 KB one-line payload is scanned in seconds; a scan over its budget stops with exit 2" {
+  require_lune
+  {
+    printf '<roblox version="4"><Item class="Model" referent="RBX0"><Properties><string name="Name">Big</string></Properties>'
+    printf '<Item class="Script" referent="RBX1"><Properties><string name="Name">Blob</string><ProtectedString name="Source"><![CDATA[local s = %s]]></ProtectedString></Properties></Item></Item></roblox>\n' \
+      "'$(printf 'abc%.0s' $(seq 1 66667))'"
+  } >"$BATS_TEST_TMPDIR/blob.rbxmx"
+  [ "$(wc -c <"$BATS_TEST_TMPDIR/blob.rbxmx")" -gt 200000 ]
+  start=$SECONDS
+  run bash "$SCAN" "$BATS_TEST_TMPDIR/blob.rbxmx"
+  [ $((SECONDS - start)) -lt 15 ] # it took minutes before the patterns were anchored
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"long-line"*"longer than 500 characters"* ]]
+  RDK_SCAN_BUDGET=0 run bash "$SCAN" "$FIX/backdoor.rbxmx"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"the scan stopped after 0 s of work"*"Treat it as unsafe."* ]]
+  RDK_SCAN_BUDGET=soon run bash "$SCAN" "$FIX/backdoor.rbxmx"
+  [ "$status" -eq 2 ]
+}
+
 @test "scan: unreadable input and usage errors exit 2" {
   require_lune
   run bash "$SCAN" "$FIX/garbage.rbxm"
