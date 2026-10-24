@@ -1,0 +1,297 @@
+{
+  "data": [
+    {
+      "asset": {
+        "id": 124879875206878,
+        "name": "Stylized Pine Tree Set (RECOLORABLE)",
+        "typeId": 10,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "Optimized Game Ready Stylized pine and fir trees!\n\nIncludes:\n\n- 3 Pine Model variants\n\n- Three Fir  Model variants",
+        "duration": 0,
+        "hasScripts": false,
+        "createdUtc": "2026-01-08T20:55:19.43Z",
+        "updatedUtc": "2026-01-13T23:00:23.313Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 1,
+        "socialLinks": [],
+        "modelTechnicalDetails": {
+          "objectMeshSummary": {
+            "triangles": 20474,
+            "vertices": 14508
+          },
+          "instanceCounts": {
+            "script": 0,
+            "meshPart": 13,
+            "animation": 0,
+            "decal": 1,
+            "audio": 0,
+            "tool": 0
+          }
+        },
+        "previewAssets": {
+          "imagePreviewAssets": [
+            114561109558544,
+            85972775213265,
+            136297965082097
+          ],
+          "videoPreviewAssets": []
+        },
+        "categoryPath": "3d__nature",
+        "capabilities": {
+          "shouldSandbox": true
+        }
+      },
+      "creator": {
+        "id": 36473779,
+        "name": "BlackoutCedar",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 0,
+        "downVotes": 0,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 0,
+        "upVotePercent": 100
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 4990000000,
+            "exponent": -9
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": false
+      }
+    },
+    {
+      "asset": {
+        "id": 5392132809,
+        "name": "Realistic Pine Tree ",
+        "typeId": 10,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "I did not create this model, props to whoever did.",
+        "duration": 0,
+        "hasScripts": false,
+        "createdUtc": "2020-07-20T23:33:26.837Z",
+        "updatedUtc": "2021-07-24T09:10:05.19Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 1,
+        "socialLinks": [],
+        "modelTechnicalDetails": {
+          "objectMeshSummary": {
+            "triangles": 10048,
+            "vertices": 10514
+          },
+          "instanceCounts": {
+            "script": 0,
+            "meshPart": 3,
+            "animation": 0,
+            "decal": 0,
+            "audio": 0,
+            "tool": 0
+          }
+        },
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        },
+        "categoryPath": "3d__nature",
+        "capabilities": {
+          "shouldSandbox": true
+        },
+        "objectTypes": [
+          "Tree",
+          "Plant"
+        ]
+      },
+      "creator": {
+        "id": 143539349,
+        "name": "GabeQZ",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 97,
+        "downVotes": 3,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 100,
+        "upVotePercent": 97
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    },
+    {
+      "asset": {
+        "id": 183435411,
+        "name": "Pine Tree",
+        "typeId": 10,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": true,
+        "description": "Cause heck, why not? \r\n\r\nA pine tree is cool, right?",
+        "duration": 0,
+        "hasScripts": false,
+        "createdUtc": "2014-10-21T20:59:44.257Z",
+        "updatedUtc": "2016-06-14T18:43:37.507Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 1,
+        "socialLinks": [],
+        "modelTechnicalDetails": {
+          "objectMeshSummary": {
+            "triangles": 780,
+            "vertices": 1560
+          },
+          "instanceCounts": {
+            "script": 0,
+            "meshPart": 0,
+            "animation": 0,
+            "decal": 0,
+            "audio": 0,
+            "tool": 0
+          }
+        },
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        },
+        "categoryPath": "3d__nature",
+        "capabilities": {
+          "shouldSandbox": false
+        },
+        "objectTypes": [
+          "Tree",
+          "Plant"
+        ]
+      },
+      "creator": {
+        "id": 4397833,
+        "name": "Quenty",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 17800,
+        "downVotes": 2200,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 20000,
+        "upVotePercent": 89
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    },
+    {
+      "asset": {
+        "id": 125459331,
+        "name": "Tree House",
+        "typeId": 10,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": true,
+        "description": "A Treehouse made by me :D\r\n\r\nFree to take; you can even customize the interior.\r\nAll design done by me; this was inspire",
+        "duration": 0,
+        "hasScripts": true,
+        "scriptCount": 2,
+        "createdUtc": "2013-08-06T15:10:22.153Z",
+        "updatedUtc": "2016-10-23T14:21:44.833Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 1,
+        "socialLinks": [],
+        "modelTechnicalDetails": {
+          "objectMeshSummary": {
+            "triangles": 24478,
+            "vertices": 35458
+          },
+          "instanceCounts": {
+            "script": 2,
+            "meshPart": 0,
+            "animation": 0,
+            "decal": 0,
+            "audio": 0,
+            "tool": 0
+          }
+        },
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        },
+        "categoryPath": "3d__structures",
+        "capabilities": {
+          "shouldSandbox": true
+        },
+        "objectTypes": [
+          "Tree House",
+          "Building"
+        ]
+      },
+      "creator": {
+        "id": 1826533,
+        "name": "Aurarus",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 8900,
+        "downVotes": 1100,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 10000,
+        "upVotePercent": 89
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    }
+  ]
+}

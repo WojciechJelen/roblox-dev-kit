@@ -1,0 +1,24 @@
+{
+  "query": "pine tree",
+  "type": "models",
+  "model": "qwen3-0.6b/v1",
+  "minScore": 0.35,
+  "hybrid": true,
+  "total": 166,
+  "considered": 521,
+  "keywordMatches": 45,
+  "results": [
+    {
+      "slug": "pine_tree_01",
+      "score": 0.7473
+    },
+    {
+      "slug": "pine_sapling_medium",
+      "score": 0.648
+    },
+    {
+      "slug": "fir_tree_01",
+      "score": 0.6808
+    }
+  ]
+}

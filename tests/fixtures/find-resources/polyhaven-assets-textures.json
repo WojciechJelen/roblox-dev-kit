@@ -1,0 +1,203 @@
+{
+  "brick_4": {
+    "type": 1,
+    "tags": [
+      "red",
+      "moss",
+      "urban",
+      "city",
+      "damp",
+      "wet"
+    ],
+    "date_published": 1529359200,
+    "name": "Brick 4",
+    "categories": [
+      "wall",
+      "man made",
+      "dirty",
+      "outdoor",
+      "brick"
+    ],
+    "authors": {
+      "Rob Tuytel": "All"
+    },
+    "dimensions": [
+      500,
+      500
+    ],
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "files_hash": "e38995ecc649eb71f1b8dde6b34c86f0f8005da3",
+    "description": "Free 8K texture of weathered red brick with damp, mossy mortar, chipped rough faces and subtle grime - aged urban outdoor wall material.",
+    "sponsors": [
+      "201346459"
+    ],
+    "category_id": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+    "category": "Brick & Block/Clay Brick/Running-Bond",
+    "attributes": {
+      "surface_use": "wall",
+      "condition": [
+        "weathered",
+        "mossy"
+      ],
+      "origin": "man_made",
+      "setting": "outdoor"
+    },
+    "img_version": "c9dcb19e",
+    "download_count": 136371,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/brick_4.png?width=256&height=256&format=webp&v=c9dcb19e"
+  },
+  "brick_wall_02": {
+    "type": 1,
+    "tags": [
+      "weathered",
+      "cracked",
+      "concrete",
+      "scratched",
+      "brick",
+      "bricks",
+      "wall",
+      "exterior",
+      "red brick"
+    ],
+    "date_published": 1686787200,
+    "name": "Brick Wall 02",
+    "authors": {
+      "Dimitrios Savva": "All"
+    },
+    "info": null,
+    "dimensions": [
+      2000,
+      2000
+    ],
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "files_hash": "53adbda826ddf102330df522b3a646696d902059",
+    "description": "Free 8K texture of a weathered red brick wall with cracked, gritty mortar, scratched and soot-darkened bricks, rough uneven surface and concrete residue.",
+    "categories": [
+      "wall",
+      "brick",
+      "outdoor",
+      "man made"
+    ],
+    "category_id": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+    "category": "Brick & Block/Clay Brick/Running-Bond",
+    "attributes": {
+      "surface_use": "wall",
+      "condition": [
+        "weathered",
+        "damaged",
+        "cracked"
+      ],
+      "origin": "man_made",
+      "setting": "outdoor"
+    },
+    "img_version": "8eaefc7c",
+    "download_count": 51357,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/brick_wall_02.png?width=256&height=256&format=webp&v=8eaefc7c"
+  },
+  "brick_wall_07": {
+    "name": "Brick Wall 07",
+    "categories": [
+      "wall",
+      "brick",
+      "man made"
+    ],
+    "type": 1,
+    "tags": [
+      "rough",
+      "old",
+      "brick",
+      "bricks",
+      "walling",
+      "coarse",
+      "outdoors",
+      "outdoor",
+      "wall",
+      "exterior",
+      "gritty",
+      "rough  "
+    ],
+    "authors": {
+      "Dimitrios Savva": "All"
+    },
+    "info": null,
+    "dimensions": [
+      1700.0000476837158,
+      1700.0000476837158
+    ],
+    "date_published": 1706745600,
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "files_hash": "85f400618390151073ceb6951060afa8857b22c7",
+    "description": "Free 8K texture of an old, coarse exterior brick wall with gritty, weathered orange-brown bricks, chipped edges, pitted surfaces and worn mortar.",
+    "category_id": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+    "category": "Brick & Block/Clay Brick/Running-Bond",
+    "attributes": {
+      "surface_use": "wall",
+      "condition": [
+        "weathered",
+        "worn"
+      ],
+      "origin": "man_made",
+      "setting": "outdoor"
+    },
+    "img_version": "fec04fa1",
+    "download_count": 17038,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/brick_wall_07.png?width=256&height=256&format=webp&v=fec04fa1"
+  },
+  "dark_brick_wall": {
+    "name": "Dark Brick Wall",
+    "categories": [
+      "outdoor",
+      "man made",
+      "wall",
+      "brick"
+    ],
+    "type": 1,
+    "authors": {
+      "Dario Barresi": "Processing",
+      "Dimitrios Savva": "Photography"
+    },
+    "tags": [
+      "rough",
+      "uneven",
+      "wall",
+      "dry",
+      "bricks",
+      "brick",
+      "dark"
+    ],
+    "info": null,
+    "dimensions": [
+      1049.9998331069946,
+      1049.9999523162842
+    ],
+    "date_published": 1671667200,
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "files_hash": "8b2e75f6c32afda3774291ca8c1c96411220df9e",
+    "description": "Free 8K texture of a dark, dry brick wall with rough, uneven faces, deep mortar joints and a gritty, weathered surface.",
+    "category_id": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+    "category": "Brick & Block/Clay Brick/Running-Bond",
+    "attributes": {
+      "surface_use": "wall",
+      "condition": [
+        "weathered"
+      ],
+      "origin": "man_made",
+      "setting": "outdoor"
+    },
+    "img_version": "66ed9ca9",
+    "download_count": 43103,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/dark_brick_wall.png?width=256&height=256&format=webp&v=66ed9ca9"
+  }
+}

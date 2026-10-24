@@ -1,0 +1,134 @@
+{
+  "next": null,
+  "previous": null,
+  "cursors": {
+    "next": null,
+    "previous": null
+  },
+  "results": [
+    {
+      "uid": "218caec043db49d4b41855ab7e92765d",
+      "name": "CC0 シュレーゲルアオガエル 🐸 ♀ Schlegel's Green Tree Frog",
+      "viewerUrl": "https://sketchfab.com/3d-models/none-218caec043db49d4b41855ab7e92765d",
+      "isDownloadable": true,
+      "publishedAt": "2025-03-19T06:47:09.340749",
+      "license": {
+        "uid": "7c23a1ba438d4306920229c12afcb5f9",
+        "label": "CC0 Public Domain"
+      },
+      "faceCount": 15526,
+      "vertexCount": 7765,
+      "animationCount": 1,
+      "user": {
+        "username": "ffishAsia-and-floraZia",
+        "displayName": "ffish.asia / floraZia.com",
+        "profileUrl": "https://sketchfab.com/ffishAsia-and-floraZia"
+      },
+      "thumbnails": {
+        "images": [
+          {
+            "uid": "d05068f8afcc45989909239223909120",
+            "size": 4362,
+            "width": 256,
+            "url": "https://media.sketchfab.com/models/218caec043db49d4b41855ab7e92765d/thumbnails/1e9f4f9cb35f4c9ca2a56517caae1890/2aba19bf743b4ed9a8fbf494598cf281.jpeg",
+            "height": 144
+          }
+        ]
+      },
+      "archives": {
+        "extra": {
+          "type": "extra",
+          "size": 1846778,
+          "faceCount": null,
+          "textureMaxResolution": null
+        },
+        "glb": {
+          "type": "glb",
+          "size": 3739668,
+          "faceCount": 15526,
+          "textureMaxResolution": 2048
+        },
+        "gltf": {
+          "type": "gltf",
+          "size": 2751431,
+          "faceCount": 15526,
+          "textureMaxResolution": 2048
+        },
+        "source": {
+          "type": "source",
+          "size": 6090033,
+          "faceCount": null,
+          "textureMaxResolution": null
+        },
+        "usdz": {
+          "type": "usdz",
+          "size": 3539171,
+          "faceCount": null,
+          "textureMaxResolution": null
+        }
+      }
+    },
+    {
+      "uid": "eaab4311b5ee4d16b5235ff30c8ba1a1",
+      "name": "CC0 ニホンアマガエル 🐸 ♀ Japanese Tree Frog",
+      "viewerUrl": "https://sketchfab.com/3d-models/none-eaab4311b5ee4d16b5235ff30c8ba1a1",
+      "isDownloadable": true,
+      "publishedAt": "2025-03-20T05:43:00.641029",
+      "license": {
+        "uid": "7c23a1ba438d4306920229c12afcb5f9",
+        "label": "CC0 Public Domain"
+      },
+      "faceCount": 18961,
+      "vertexCount": 9291,
+      "animationCount": 1,
+      "user": {
+        "username": "ffishAsia-and-floraZia",
+        "displayName": "ffish.asia / floraZia.com",
+        "profileUrl": "https://sketchfab.com/ffishAsia-and-floraZia"
+      },
+      "thumbnails": {
+        "images": [
+          {
+            "uid": "3f18ca9cab2141eb9addbc03464b8867",
+            "size": 4844,
+            "width": 256,
+            "url": "https://media.sketchfab.com/models/eaab4311b5ee4d16b5235ff30c8ba1a1/thumbnails/2973d895a13145c1b93c2317dd5b8cae/fbfe6c543af6430086976a222071b1c4.jpeg",
+            "height": 144
+          }
+        ]
+      },
+      "archives": {
+        "extra": {
+          "type": "extra",
+          "size": 2179880,
+          "faceCount": null,
+          "textureMaxResolution": null
+        },
+        "glb": {
+          "type": "glb",
+          "size": 4600068,
+          "faceCount": 18961,
+          "textureMaxResolution": 2048
+        },
+        "gltf": {
+          "type": "gltf",
+          "size": 3174617,
+          "faceCount": 18961,
+          "textureMaxResolution": 2048
+        },
+        "source": {
+          "type": "source",
+          "size": 7439863,
+          "faceCount": null,
+          "textureMaxResolution": null
+        },
+        "usdz": {
+          "type": "usdz",
+          "size": 4173333,
+          "faceCount": null,
+          "textureMaxResolution": null
+        }
+      }
+    }
+  ]
+}

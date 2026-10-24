@@ -1,0 +1,106 @@
+{
+  "data": [
+    {
+      "asset": {
+        "id": 2182197135,
+        "name": "white brick wall",
+        "typeId": 13,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "",
+        "duration": 0,
+        "hasScripts": false,
+        "createdUtc": "2018-08-07T05:34:57.84Z",
+        "updatedUtc": "2018-08-07T05:34:57.853Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 0,
+        "socialLinks": [],
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        }
+      },
+      "creator": {
+        "id": 98087607,
+        "name": "Ayzria",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 0,
+        "downVotes": 0,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 0,
+        "upVotePercent": 100
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    },
+    {
+      "asset": {
+        "id": 2181801537,
+        "name": "black brick wall",
+        "typeId": 13,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "",
+        "duration": 0,
+        "hasScripts": false,
+        "createdUtc": "2018-08-07T03:13:13.72Z",
+        "updatedUtc": "2018-08-07T03:13:13.72Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 0,
+        "socialLinks": [],
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        }
+      },
+      "creator": {
+        "id": 98087607,
+        "name": "Ayzria",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 0,
+        "downVotes": 0,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 0,
+        "upVotePercent": 0
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    }
+  ]
+}

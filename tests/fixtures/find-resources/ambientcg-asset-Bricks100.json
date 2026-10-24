@@ -1,0 +1,76 @@
+{
+  "searchQuery": {
+    "forceSpecificAssetId": false,
+    "category": [],
+    "assetId": [
+      "bricks100"
+    ],
+    "dataType": [],
+    "creationMethod": null,
+    "queryString": "",
+    "sort": "Popular",
+    "createdUsingAssetId": null,
+    "basedOnAssetId": null,
+    "variationsOfAssetId": null,
+    "limit": 100,
+    "offset": 0
+  },
+  "numberOfResults": 1,
+  "nextPageHttp": null,
+  "foundAssets": [
+    {
+      "assetId": "Bricks100",
+      "displayName": "Bricks 100",
+      "dataType": "Material",
+      "creationMethod": "PBRPhotogrammetry",
+      "tags": [
+        "100",
+        "beige",
+        "brick",
+        "bricks",
+        "medival",
+        "old",
+        "stone",
+        "stones",
+        "wall"
+      ],
+      "downloadCount": 26952,
+      "dimensionX": 0,
+      "dimensionY": 0,
+      "dimensionZ": 0,
+      "shortLink": "https://ambientcg.com/a/Bricks100",
+      "previewImage": {
+        "256-PNG": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/256-PNG/Bricks100.png",
+        "512-PNG": "https://acg-media.struffelproductions.com/file/ambientCG-Web/media/thumbnail/512-PNG/Bricks100.png"
+      },
+      "downloadFolders": {
+        "default": {
+          "downloadFiletypeCategories": {
+            "zip": {
+              "downloads": [
+                {
+                  "fullDownloadPath": "https://ambientcg.com/get?file=Bricks100_1K-JPG.zip",
+                  "downloadLink": "https://ambientcg.com/get?file=Bricks100_1K-JPG.zip",
+                  "fileName": "Bricks100_1K-JPG.zip",
+                  "size": 4827385,
+                  "filetype": "zip",
+                  "attribute": "1K-JPG",
+                  "zipContent": []
+                },
+                {
+                  "fullDownloadPath": "https://ambientcg.com/get?file=Bricks100_2K-JPG.zip",
+                  "downloadLink": "https://ambientcg.com/get?file=Bricks100_2K-JPG.zip",
+                  "fileName": "Bricks100_2K-JPG.zip",
+                  "size": 14462424,
+                  "filetype": "zip",
+                  "attribute": "2K-JPG",
+                  "zipContent": []
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

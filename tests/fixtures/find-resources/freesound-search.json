@@ -1,0 +1,43 @@
+{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 900001,
+      "name": "fixture jump cc0.wav",
+      "username": "fixture_user",
+      "license": "Creative Commons 0",
+      "duration": 0.42,
+      "previews": {
+        "preview-hq-mp3": "https://cdn.freesound.org/previews/fixture/900001-hq.mp3",
+        "preview-lq-mp3": "https://cdn.freesound.org/previews/fixture/900001-lq.mp3",
+        "preview-hq-ogg": "https://cdn.freesound.org/previews/fixture/900001-hq.ogg",
+        "preview-lq-ogg": "https://cdn.freesound.org/previews/fixture/900001-lq.ogg"
+      },
+      "url": "https://freesound.org/people/fixture_user/sounds/900001/"
+    },
+    {
+      "id": 900002,
+      "name": "fixture jump by.wav",
+      "username": "fixture_user",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "duration": 1.25,
+      "previews": {
+        "preview-hq-mp3": "https://cdn.freesound.org/previews/fixture/900002-hq.mp3"
+      },
+      "url": "https://freesound.org/people/fixture_user/sounds/900002/"
+    },
+    {
+      "id": 900003,
+      "name": "fixture jump nc.wav",
+      "username": "other_user",
+      "license": "Attribution NonCommercial",
+      "duration": 2,
+      "previews": {
+        "preview-hq-mp3": "https://cdn.freesound.org/previews/fixture/900003-hq.mp3"
+      },
+      "url": "https://freesound.org/people/other_user/sounds/900003/"
+    }
+  ]
+}

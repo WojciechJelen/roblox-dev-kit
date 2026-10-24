@@ -1,0 +1,51 @@
+{
+  "type": 1,
+  "tags": [
+    "red",
+    "moss",
+    "urban",
+    "city",
+    "damp",
+    "wet"
+  ],
+  "date_published": 1529359200,
+  "name": "Brick 4",
+  "old_id": 131,
+  "categories": [
+    "wall",
+    "man made",
+    "dirty",
+    "outdoor",
+    "brick"
+  ],
+  "authors": {
+    "Rob Tuytel": "All"
+  },
+  "dimensions": [
+    500,
+    500
+  ],
+  "max_resolution": [
+    8192,
+    8192
+  ],
+  "files_hash": "e38995ecc649eb71f1b8dde6b34c86f0f8005da3",
+  "description": "Free 8K texture of weathered red brick with damp, mossy mortar, chipped rough faces and subtle grime - aged urban outdoor wall material.",
+  "sponsors": [
+    "201346459"
+  ],
+  "category_id": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+  "category": "Brick & Block/Clay Brick/Running-Bond",
+  "attributes": {
+    "surface_use": "wall",
+    "condition": [
+      "weathered",
+      "mossy"
+    ],
+    "origin": "man_made",
+    "setting": "outdoor"
+  },
+  "img_version": "c9dcb19e",
+  "download_count": 136371,
+  "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/brick_4.png?width=256&height=256&format=webp&v=c9dcb19e"
+}

@@ -1,0 +1,23 @@
+{
+  "total": 2,
+  "results": [
+    {
+      "ID": "fixture01",
+      "Title": "Fixture Pine",
+      "Attribution": "Fixture Pine by Fixture Creator [CC-BY] via Poly Pizza",
+      "Thumbnail": "https://static.poly.pizza/fixture01.webp",
+      "Download": "https://static.poly.pizza/fixture01.glb",
+      "Tri Count": 1200,
+      "Creator": { "Username": "Fixture Creator" },
+      "Licence": "CC-BY 3.0"
+    },
+    {
+      "ID": "fixture02",
+      "Title": "Fixture Fir",
+      "Download": "https://static.poly.pizza/fixture02.glb",
+      "Tri Count": 64000,
+      "Creator": { "Username": "Another Creator" },
+      "Licence": "CC0 1.0"
+    }
+  ]
+}

@@ -12,6 +12,7 @@ KIT_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd -P)"
 SETUP_SCRIPTS="$KIT_ROOT/skills/roblox-setup/scripts"
 DOCTOR="$KIT_ROOT/skills/roblox-doctor/scripts/doctor.sh"
 BLENDER_SCRIPTS="$KIT_ROOT/skills/blender-to-roblox/scripts"
+FIND_SCRIPTS="$KIT_ROOT/skills/find-resources/scripts"
 
 # Opt-in gates, read before setup_fake_machine clears RDK_NETWORK_TESTS (which the doctor also reads).
 NETWORK_TESTS=${RDK_NETWORK_TESTS:-0}
@@ -20,6 +21,8 @@ NETWORK_TESTS=${RDK_NETWORK_TESTS:-0}
 REAL_JQ=$(command -v jq)
 REAL_GIT=$(command -v git || true)
 REAL_PYTHON=$(command -v python3 || true)
+REAL_HOME=$HOME
+REAL_LUNE_ON_PATH=$(command -v lune || true)
 
 setup_fake_machine() {
   FAKE="$BATS_TEST_TMPDIR/machine"
@@ -191,4 +194,25 @@ time.sleep(30)' "$portfile" &
     "$REAL_PYTHON" -I -c 'import time; time.sleep(0.05)'
   done
   LISTEN_PORT=$(cat "$portfile")
+}
+
+# --- Lune (the model scanner tests) -------------------------------------------------------------
+# Skipped unless Lune is installed (`command -v lune` or ~/.rokit/bin/lune). Rokit's shim only runs
+# where a rokit.toml lists lune, which the fake HOME has not, so the tests use the binary in Rokit's
+# tool storage when it is there. RDK_REAL_LUNE picks a binary.
+
+require_lune() {
+  local c
+  REAL_LUNE=${RDK_REAL_LUNE:-}
+  if [ -z "$REAL_LUNE" ]; then
+    [ -n "$REAL_LUNE_ON_PATH" ] || [ -x "$REAL_HOME/.rokit/bin/lune" ] || skip "lune is not installed (command -v lune, ~/.rokit/bin/lune)"
+    for c in "$REAL_HOME"/.rokit/tool-storage/lune-org/lune/*/lune "$REAL_LUNE_ON_PATH" "$REAL_HOME/.rokit/bin/lune"; do
+      if [ -n "$c" ] && [ -x "$c" ] && "$c" --version >/dev/null 2>&1; then
+        REAL_LUNE=$c
+        break
+      fi
+    done
+  fi
+  [ -n "$REAL_LUNE" ] || skip "no runnable lune found"
+  export RDK_LUNE_BIN=$REAL_LUNE
 }

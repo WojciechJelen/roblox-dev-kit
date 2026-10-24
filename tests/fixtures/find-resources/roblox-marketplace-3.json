@@ -1,0 +1,19 @@
+{
+  "totalResults": 1000,
+  "filteredKeyword": "jump",
+  "nextPageCursor": "MV8xXzFfNg==_97880cde25881ebf07c1c34540ad017f",
+  "data": [
+    {
+      "id": 139162107746216,
+      "searchResultSource": "LexicalWithSort"
+    },
+    {
+      "id": 135162567109750,
+      "searchResultSource": "LexicalWithSort"
+    },
+    {
+      "id": 109397400639910,
+      "searchResultSource": "LexicalWithSort"
+    }
+  ]
+}

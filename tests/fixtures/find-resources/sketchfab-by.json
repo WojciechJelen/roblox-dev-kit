@@ -1,0 +1,122 @@
+{
+  "next": "https://api.sketchfab.com/v3/search?count=3&cursor=3&downloadable=true&license=by&max_face_count=20000&q=pine+tree&type=models",
+  "previous": null,
+  "cursors": {
+    "next": "3",
+    "previous": null
+  },
+  "results": [
+    {
+      "uid": "e52769d653cd4e52a4acff3041961e65",
+      "name": "Pine tree",
+      "viewerUrl": "https://sketchfab.com/3d-models/none-e52769d653cd4e52a4acff3041961e65",
+      "isDownloadable": true,
+      "publishedAt": "2020-10-17T10:14:19.260139",
+      "license": {
+        "uid": "322a749bcfa841b29dff1e8a1bb74b0b",
+        "label": "CC Attribution"
+      },
+      "faceCount": 2173,
+      "vertexCount": 1709,
+      "animationCount": 0,
+      "user": {
+        "username": "sheh5262",
+        "displayName": "Andriy Shekh",
+        "profileUrl": "https://sketchfab.com/sheh5262"
+      },
+      "thumbnails": {
+        "images": [
+          {
+            "uid": "4de9b458ac724bb1a517b74b198bff3b",
+            "size": 2527,
+            "width": 256,
+            "url": "https://media.sketchfab.com/models/e52769d653cd4e52a4acff3041961e65/thumbnails/c0db301fc1b14d94a4459e924505fbef/0082c0c96282478c8188c85feb1484f0.jpeg",
+            "height": 144
+          }
+        ]
+      },
+      "archives": {
+        "glb": {
+          "type": "glb",
+          "size": 1624028,
+          "faceCount": 2173,
+          "textureMaxResolution": 512
+        },
+        "gltf": {
+          "type": "gltf",
+          "size": 1490581,
+          "faceCount": 2173,
+          "textureMaxResolution": 512
+        },
+        "source": {
+          "type": "source",
+          "size": 1774555,
+          "faceCount": null,
+          "textureMaxResolution": null
+        },
+        "usdz": {
+          "type": "usdz",
+          "size": 1054423,
+          "faceCount": null,
+          "textureMaxResolution": null
+        }
+      }
+    },
+    {
+      "uid": "d45218a3fab349e5b1de040f29e7b6f9",
+      "name": "Pine Tree",
+      "viewerUrl": "https://sketchfab.com/3d-models/none-d45218a3fab349e5b1de040f29e7b6f9",
+      "isDownloadable": true,
+      "publishedAt": "2022-06-02T10:59:03.666913",
+      "license": {
+        "uid": "322a749bcfa841b29dff1e8a1bb74b0b",
+        "label": "CC Attribution"
+      },
+      "faceCount": 5627,
+      "vertexCount": 3487,
+      "animationCount": 0,
+      "user": {
+        "username": "evolveduk",
+        "displayName": "evolveduk",
+        "profileUrl": "https://sketchfab.com/evolveduk"
+      },
+      "thumbnails": {
+        "images": [
+          {
+            "uid": "f0731c61f1e14f29b01da648aed203d0",
+            "size": 3229,
+            "width": 256,
+            "url": "https://media.sketchfab.com/models/d45218a3fab349e5b1de040f29e7b6f9/thumbnails/50c50cb47251469288b4b005db572329/375b5839342b48729cf236c2d3593f20.jpeg",
+            "height": 144
+          }
+        ]
+      },
+      "archives": {
+        "glb": {
+          "type": "glb",
+          "size": 4937388,
+          "faceCount": 5627,
+          "textureMaxResolution": 1024
+        },
+        "gltf": {
+          "type": "gltf",
+          "size": 4834027,
+          "faceCount": 5627,
+          "textureMaxResolution": 1024
+        },
+        "source": {
+          "type": "source",
+          "size": 13496037,
+          "faceCount": null,
+          "textureMaxResolution": null
+        },
+        "usdz": {
+          "type": "usdz",
+          "size": 2917446,
+          "faceCount": null,
+          "textureMaxResolution": null
+        }
+      }
+    }
+  ]
+}

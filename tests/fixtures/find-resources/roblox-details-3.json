@@ -1,0 +1,178 @@
+{
+  "data": [
+    {
+      "asset": {
+        "audioDetails": {
+          "audioType": "SoundEffect",
+          "artist": "B0C0NICK",
+          "title": "Jumpscare sound",
+          "musicAlbum": "",
+          "tags": []
+        },
+        "id": 139162107746216,
+        "name": "Jumpscare sound",
+        "typeId": 3,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "",
+        "duration": 2,
+        "hasScripts": false,
+        "createdUtc": "2026-04-17T19:53:54.897Z",
+        "updatedUtc": "2026-04-18T17:17:36.164Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 0,
+        "socialLinks": [],
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        }
+      },
+      "creator": {
+        "id": 4054345687,
+        "name": "B0C0NICK",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 0,
+        "downVotes": 0,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 0,
+        "upVotePercent": 50
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    },
+    {
+      "asset": {
+        "audioDetails": {
+          "audioType": "SoundEffect",
+          "artist": "EightyKoii",
+          "title": "Jump Sound",
+          "musicAlbum": "",
+          "tags": []
+        },
+        "id": 135162567109750,
+        "name": "Jump Sound",
+        "typeId": 3,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "Audio",
+        "duration": 1,
+        "hasScripts": false,
+        "createdUtc": "2025-05-18T17:51:34.9Z",
+        "updatedUtc": "2025-05-18T17:51:34.907Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 0,
+        "socialLinks": [],
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        }
+      },
+      "creator": {
+        "id": 4294665043,
+        "name": "EightyKoii",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 0,
+        "downVotes": 0,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 0,
+        "upVotePercent": 100
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    },
+    {
+      "asset": {
+        "audioDetails": {
+          "audioType": "SoundEffect",
+          "artist": "FNFmaster111",
+          "title": "Classic Roblox Jump",
+          "musicAlbum": "",
+          "tags": []
+        },
+        "id": 109397400639910,
+        "name": "Classic Roblox Jump",
+        "typeId": 3,
+        "assetSubTypes": [],
+        "assetGenres": [
+          "All"
+        ],
+        "isEndorsed": false,
+        "description": "Audio",
+        "duration": 0,
+        "hasScripts": false,
+        "createdUtc": "2024-10-11T17:20:51.447Z",
+        "updatedUtc": "2024-10-11T17:20:51.45Z",
+        "isAssetHashApproved": true,
+        "visibilityStatus": 0,
+        "socialLinks": [],
+        "previewAssets": {
+          "imagePreviewAssets": [],
+          "videoPreviewAssets": []
+        }
+      },
+      "creator": {
+        "id": 2520273236,
+        "name": "FNFmaster111",
+        "type": 1,
+        "isVerifiedCreator": true
+      },
+      "voting": {
+        "showVotes": true,
+        "upVotes": 0,
+        "downVotes": 0,
+        "canVote": false,
+        "hasVoted": false,
+        "voteCount": 0,
+        "upVotePercent": 0
+      },
+      "fiatProduct": {
+        "purchasePrice": {
+          "currencyCode": "USD",
+          "quantity": {
+            "significand": 0,
+            "exponent": 0
+          }
+        },
+        "published": true,
+        "purchasable": true,
+        "isFree": true
+      }
+    }
+  ]
+}

