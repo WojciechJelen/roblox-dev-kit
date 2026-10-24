@@ -11,6 +11,7 @@ bats_require_minimum_version 1.5.0
 KIT_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd -P)"
 SETUP_SCRIPTS="$KIT_ROOT/skills/roblox-setup/scripts"
 DOCTOR="$KIT_ROOT/skills/roblox-doctor/scripts/doctor.sh"
+BLENDER_SCRIPTS="$KIT_ROOT/skills/blender-to-roblox/scripts"
 
 # Opt-in gates, read before setup_fake_machine clears RDK_NETWORK_TESTS (which the doctor also reads).
 NETWORK_TESTS=${RDK_NETWORK_TESTS:-0}
@@ -128,6 +129,37 @@ status_of() {
 detail_of() {
   printf '%s' "$output" | jq -r --arg id "$1" '.checks[] | select(.id == $id) | .detail'
 }
+
+# --- opt-in suites that drive a real Blender (RDK_BLENDER_TESTS=1) ----------------------------
+# Blender's user folders point into the test's temp dir, so the real preferences are never touched.
+
+REAL_BLENDER=${RDK_REAL_BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}
+
+real_blender_enabled() { [ "${RDK_BLENDER_TESTS:-0}" = 1 ] && [ -x "$REAL_BLENDER" ]; }
+
+require_real_blender() {
+  [ "${RDK_BLENDER_TESTS:-0}" = 1 ] || skip "set RDK_BLENDER_TESTS=1 to run against a real Blender"
+  [ -x "$REAL_BLENDER" ] || skip "no Blender at $REAL_BLENDER"
+}
+
+# use_real_blender: after setup_fake_machine, let the scripts run the real Blender.
+use_real_blender() {
+  export RDK_BLENDER_BIN=$REAL_BLENDER BLENDER_USER_RESOURCES="$BATS_FILE_TMPDIR/blender-user"
+}
+
+# build_car NAME [car_scene.py options]: build $BATS_FILE_TMPDIR/NAME/NAME.blend (see tests/fixtures).
+build_car() {
+  local name=$1
+  shift
+  mkdir -p "$BATS_FILE_TMPDIR/$name"
+  BLENDER_USER_RESOURCES="$BATS_FILE_TMPDIR/blender-user" "$REAL_BLENDER" --background --quiet --python-exit-code 1 \
+    --python "$KIT_ROOT/tests/fixtures/car_scene.py" -- "$BATS_FILE_TMPDIR/$name/$name.blend" "$@" >/dev/null
+}
+
+car() { printf '%s\n' "$BATS_FILE_TMPDIR/$1/$1.blend"; }
+
+# json_line: the one-line JSON report in $output (Blender prints its own lines around it).
+json_line() { printf '%s\n' "$output" | grep '^{' | tail -n 1; }
 
 # listen_on_free_port: start a TCP listener; sets LISTEN_PORT and LISTEN_PID.
 listen_on_free_port() {

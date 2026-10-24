@@ -46,6 +46,7 @@ lint:
 
 validate:
 	@bash scripts/validate-skills.sh
+	@bash scripts/validate-evals.sh
 
 test:
 	@bats tests/

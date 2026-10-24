@@ -56,7 +56,7 @@ Use these; do not re-derive or guess. Everything below was checked on this machi
   **Cold start ≈ 46 s (≈ 210 MB clone), warm ≈ 4 s** → MCP clients time out on the first start unless uv's cache is warmed (`... blender-mcp --help`).
 - Server env: `BLENDER_MCP_HOST`, `BLENDER_MCP_PORT` (add-on connection); `BLENDER_PATH` (Blender binary for the `*_for_cli` tools; default `blender` on PATH).
 - Add-on ↔ server: TCP `localhost:9876`. Add-on prefs: `host`, `port`, `use_autostart` (**Auto Start, default on**), `autostart_delay`, polling intervals. The add-on **refuses to start its server while Preferences › System › Network › "Allow Online Access" is off** (`use_online_access`, off by default). Headless serving: `blender --background [file.blend] --command blender_mcp [--port N]`.
-- Tools (26, confirmed end to end): `execute_blender_code`, `get_blendfile_summary_*`, `get_object_detail_summary`, `get_objects_summary`, `get_python_api_docs`, `search_api_docs`, `search_manual_docs`, `get_screenshot_of_area_as_image`, `get_screenshot_of_window_as_image|json`, `jump_to_*`, `render_thumbnail_to_path`, `render_viewport_to_path`. Every summary/execute tool has a `*_for_cli` variant that opens a `.blend` in a **background Blender process** (no live Blender needed).
+- Tools (26, confirmed end to end): `execute_blender_code`, `get_blendfile_summary_*`, `get_object_detail_summary`, `get_objects_summary`, `get_python_api_docs`, `search_api_docs`, `search_manual_docs`, `get_screenshot_of_area_as_image`, `get_screenshot_of_window_as_image|json`, `jump_to_*`, `render_thumbnail_to_path`, `render_viewport_to_path`. `execute_blender_code` and the five `get_blendfile_summary_*` tools have a `*_for_cli` variant that opens a `.blend` in a **background Blender process** (no live Blender needed; 120 s timeout; unsaved changes in a live Blender with the same file are snapshotted to `<file>_mcp_NNNN.blend` first); `get_objects_summary` and `get_object_detail_summary` do not (Phase 2, tool sources at `v1.0.3`). Code returns data by assigning a dict to `result`; `render_thumbnail_to_path` writes to `<Blender temp dir>/blender_mcp/<basename>` and returns that path.
 - Security: executes LLM-generated Python in Blender without guards. Say so in docs.
 - Community alternative `ahujasid/blender-mcp` ("MCP for Blender", `addon.py`, code uses `blendermcp_*` names) uses the **same port 9876** → optional only, never both at once. Its installer also registers a server named `blender`.
 
@@ -103,7 +103,7 @@ roblox-dev-kit/
 │   │   └── scripts/lib/common.sh · doctor.sh
 │   └── blender-to-roblox/                    # PHASE 2
 │       ├── SKILL.md
-│       ├── scripts/lib/common.sh · run_blender.sh · check_mesh.py · export_fbx.py · upload-asset.sh
+│       ├── scripts/lib/common.sh · run_blender.sh · check_mesh.py · export_fbx.py · render_preview.py · upload-asset.sh
 │       └── references/export-rules.md · workflow.md · open-cloud-assets.md · blender-mcp-tools.md
 │
 ├── lib/common.sh                  # SINGLE SOURCE of shared shell helpers; `make sync-lib` copies into each skill
@@ -120,10 +120,10 @@ roblox-dev-kit/
 │
 ├── install/install.sh · uninstall.sh   # ── OTHER HARNESSES (symlink skills, then mcp-config)
 │
-├── tests/                         # bats-core; no network unless RDK_NETWORK_TESTS=1
+├── tests/                         # bats-core; no network unless RDK_NETWORK_TESTS=1; fixtures/car_scene.py
 ├── evals/                         # `claude plugin eval` cases (PHASE 2)
 ├── .github/workflows/ci.yml
-└── scripts/validate-skills.sh · release.sh
+└── scripts/validate-skills.sh · validate-evals.sh · release.sh
 ```
 
 ---
@@ -224,6 +224,7 @@ Each check: `id`, `section`, `status` (`ok|warn|fail|skip`), `detail`, `fix` (hu
 
 - **bats-core** (`brew install bats-core` locally; `bats-core/bats-action` or `npm i -g bats` in CI). Tests fake the machine via `RDK_*` env vars and a temp `HOME`; **no test installs anything into the real user environment**. Network tests gated by `RDK_NETWORK_TESTS=1`.
 - `tests/common.bats` (helpers), `tests/doctor.bats` (table + `--json` schema + exit codes + each section with fake pass/fail fixtures), `tests/scaffold.bats` (scaffold → files exist, placeholders replaced, refuses non-empty dir, valid JSON project file), `tests/adopt.bats` (mapping → project.json), `tests/mcp-config.bats` (`--dry-run` output per harness), `tests/install.bats` (symlinks, uninstall only removes own links).
+- Phase 2: `tests/run_blender.bats` (fake Blender: argument order, exit code, dry run), `tests/upload-asset.bats` (fake curl replaying Open Cloud responses: pending → done, 429 and 5xx retries, errors, moderation, the key never in argv or output), `tests/check_mesh.bats` and `tests/export_fbx.bats` (real headless Blender behind `RDK_BLENDER_TESTS=1`, scenes built by `tests/fixtures/car_scene.py`, Blender user folders in a temp dir); `scripts/validate-evals.sh` checks the `evals/` cases.
 - `scripts/validate-skills.sh`: every `skills/*/SKILL.md` has frontmatter `name` (== dir name, kebab-case ≤ 64) and `description` (≤ 1024 chars, third person, says *when* to use), body ≤ 500 lines, referenced files exist.
 - `shellcheck` all `.sh`; `python3 -m py_compile` all `.py`.
 - CI (`.github/workflows/ci.yml`): macos-latest + ubuntu-latest → shellcheck, `make check-sync`, validate-skills, bats. Optional job (allowed to fail): install rokit + scaffold + `rojo build`.
@@ -236,13 +237,15 @@ Follow the Agent Skills spec and the `skill-creator` skill's guidance: frontmatt
 ## 11. Phasing
 
 - **Phase 1**: everything in §2 except `skills/blender-to-roblox/` and `evals/`. Validate on this machine with fake-home tests; `claude plugin validate .` passes; `shellcheck`, bats and `validate-skills` green.
-- **Phase 2**: `blender-to-roblox` (export rules, `check_mesh.py`, `export_fbx.py`, `run_blender.sh` with `--background --python-exit-code 1`, `upload-asset.sh` via Open Cloud Assets API with operation polling, `references/*`), plus `evals/`.
+- **Phase 2** (done 2026-10-24): `blender-to-roblox` (export rules, `check_mesh.py`, `export_fbx.py`, `run_blender.sh` with `--background --python-exit-code 1`, `upload-asset.sh` via Open Cloud Assets API with operation polling, `references/*`), plus `evals/`. Verified with the bats suites (fake Blender and fake curl), the opt-in real-Blender suites on Blender 5.2.1, a headless smoke export, and `scripts/validate-evals.sh` (the eval cases were not run: they are paid model runs).
 - **Then**: review (fresh reviewer), fix pass, real-machine setup run with the user (actual Rokit install, Blender add-on, MCP registration), adopt Motor Rivals (`~/workspace/antek-filip-rivals`).
 
 ## 12. Non-goals for v1
 Windows support beyond path stubs; roblox-ts; publishing/CI for the *game* beyond the template workflow; custom pi/OMP extensions; the community Blender server beyond an optional profile.
 
-## 13. Deviations from the original plan (Phase 1)
+## 13. Deviations from the original plan
+
+### Phase 1
 
 - `plugin.json` has no `skills` key: the manifest key *adds* to the default `skills/` scan, so listing `./skills` would be redundant.
 - `mcp-config.sh` registers absolute commands, not `mcp/*.sh`: installed skill folders do not contain the repo's `mcp/`; `servers.json` is vendored into the setup skill instead.
@@ -255,3 +258,17 @@ Windows support beyond path stubs; roblox-ts; publishing/CI for the *game* beyon
 - Windows Studio stub uses the documented `%LOCALAPPDATA%\Roblox\mcp.bat`.
 - Extra overrides (`RDK_OS`, `RDK_NO_JQ`, `RDK_LOCAL_BIN`, `RDK_STUDIO_PLUGINS_DIR`, `RDK_ROJO_PORT`, `RDK_UVX`), doctor `--project`, `install.sh --no-mcp`, and extra test suites (`setup-blender`, `install-toolchain`, `validate`).
 - `claude plugin validate .` validates only the marketplace manifest when both manifests exist, so CI-style checks also run `claude plugin validate .claude-plugin/plugin.json --strict`, `skills` and `commands`.
+
+### Phase 2
+
+- Extra script `render_preview.py`: the skill's rule "render and look before calling it done" needs a headless way to render; `render_thumbnail_to_path` needs a live Blender (or a `_for_cli` session) and a scene camera. It frames the objects with a temporary camera (Workbench) and removes it again.
+- `run_blender.sh`: `--factory-startup` exists but only as an opt-in; Blender runs with `--quiet` unless `--verbose`; a bare script name resolves to the skill's own scripts; one `--` right after the script is dropped (Blender's own `--python X -- args` habit).
+- `check_mesh.py`: `--require-names REGEX` is paired with `--require-count N`, because a regex alone cannot require all four wheels; with Blender's unique object names, `'^Wheel_(FL|FR|RL|RR)$' --require-count 4` means exactly those four. Only triangles, textures and required names are violations; n-gons, loose geometry, UV problems, several materials ("one material per mesh object" in the texture specs), unapplied or negative transforms, zero thickness and unapplied modifiers are warnings, since Roblox words most of them as "where possible" and the importer accepts them. Extra options: `--no-modifiers`, `--scale`, `--report FILE`. `--json` prints one line, because Blender writes its own status lines to stdout in no fixed order.
+- `export_fbx.py`: modifiers are applied only with `--apply-modifiers` (as briefed), and the check then counts the same mesh that is exported; without it a warning names the modifiers left out. Extra options: `--scale`, `--dry-run`, `--json`, `--report`. Both scripts are importable (`check_mesh.check`, `export_fbx.export`) for `execute_blender_code`.
+- `upload-asset.sh`: also `--type Image` (the usage guide lists Decal and Image for the same files) and `--timeout`; `--description` defaults to the name (the API requires one); a `Rejected` moderation result exits 1; `RDK_UPLOAD_MAX_DELAY` caps waits so the tests run instantly.
+- `scripts/validate-evals.sh` (run by `make validate`): `claude plugin eval` has no validate or list mode, so the case format is checked against the documented keys instead.
+- Evals: `claude plugin eval` passes only `EVAL_*` variables to the agent and keeps HOME unreadable, so `doctor-missing-blender` scaffolds a fake machine plus a `machine.env` with the `RDK_*` overrides that the prompt tells the agent to load, and `check-mesh-report` writes a `blender.env` that keeps Blender's user folder in the workspace. Cases with input files need `--scaffold`.
+- `validate-skills.sh` now also matches script names with underscores (`run_blender.sh`).
+- The template's `AGENTS.md` and `references/stack.md` said "about 20k triangles … 1 stud ≈ 0.28 m"; they now state the documented limit and that 1 Blender unit = 1 stud with FBX Unit Scale (0.28 m is the physics unit).
+- §1 said every summary tool has a `_for_cli` variant; `get_objects_summary` and `get_object_detail_summary` do not (corrected there).
+- The doctor already had the `cloud` section; it is unchanged.

@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: setup-empty-dir
+description: |
+  roblox-setup "new" mode in an empty directory: scaffold a project and nothing else.
+expected_outcome: |
+  The agent uses the roblox-setup skill's scaffold.sh to create motor-arena/ from the template,
+  with the project name substituted everywhere (default.project.json, AGENTS.md, rokit.toml) and
+  the Wally package named motor-arena. It does not install the toolchain, register MCP servers or
+  touch Blender, and it ends by listing what was created and the next steps (toolchain install,
+  which needs the user's go-ahead).

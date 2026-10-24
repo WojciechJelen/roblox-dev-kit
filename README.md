@@ -3,7 +3,9 @@
 Agent skills for building Roblox games with AI coding agents. The kit sets up a professional
 toolchain (Rokit, Rojo, Wally, StyLua, Selene, luau-lsp, Lune, Zap, Asphalt), a strict-Luau project
 template, a way to move an existing Studio game into Rojo without breaking it, the Roblox Studio and
-Blender MCP servers, and a doctor that says exactly what is still missing.
+Blender MCP servers, and a doctor that says exactly what is still missing. A third skill takes models
+from Blender into the game: it checks them against Roblox's limits, exports FBX with Roblox's
+settings and uploads them through Open Cloud.
 
 It is two things at once:
 
@@ -20,6 +22,7 @@ The reasoning behind the stack is in [skills/roblox-setup/references/stack.md](s
 |---|---|
 | `roblox-setup` | Installs the toolchain, scaffolds a new project or adopts an existing one, registers the MCP servers, installs the Blender MCP add-on |
 | `roblox-doctor` | Read-only checks of toolchain, project, Studio, Blender, MCP registration and Open Cloud credentials; `--json` for agents, `--fix` for safe fixes |
+| `blender-to-roblox` | Checks meshes against Roblox's limits (triangles, textures, n-gons, UVs, transforms, wheel names), renders previews, exports FBX with Roblox's documented settings, uploads assets through the Open Cloud Assets API and inserts them in Studio; works with a live Blender (Blender MCP) or headless |
 
 The agent decides which steps apply; shell scripts in each skill do the actual work, so every step
 can also be run by hand (each script has `--help`, most have `--dry-run`).
@@ -59,8 +62,8 @@ happen. `install/uninstall.sh` removes only what this repo installed.
 
 ### Any other harness
 
-Copy or link `skills/roblox-setup` and `skills/roblox-doctor` wherever the harness looks for Agent
-Skills. Each skill folder is self-contained (it carries its own copy of the shared shell library).
+Copy or link each folder under `skills/` wherever the harness looks for Agent Skills. Each skill
+folder is self-contained (it carries its own copy of the shared shell library).
 
 ## Requirements
 
@@ -68,24 +71,50 @@ macOS (Linux works except for Roblox Studio), bash 3.2 or newer, git, curl, jq. 
 for the Blender steps; [uv](https://docs.astral.sh/uv/) for the Blender MCP server. Windows paths
 are stubs only.
 
+## Working with Blender
+
+The `blender-to-roblox` skill, and the `AGENTS.md` the setup skill writes into projects, hold agents
+to a few rules:
+
+- inspect the scene and the objects involved before changing anything;
+- keep reusable operations in `.py` files in the project and run those, instead of long one-off
+  snippets;
+- make those scripts idempotent: find objects by name and update them, never create duplicates on a
+  rerun;
+- save a checkpoint copy of the `.blend` before substantial changes;
+- render a preview and look at it before calling visual work done;
+- one writer per open scene: never edit a scene the user or another agent is editing.
+
+Roblox's own limits and export settings, each with its source page, are in
+[skills/blender-to-roblox/references/export-rules.md](skills/blender-to-roblox/references/export-rules.md):
+at most 20,000 triangles per mesh, texture maps up to 1024×1024, FBX exported with "FBX Unit Scale"
+(1 Blender unit = 1 stud), Forward Z and Up Y, textures copied and embedded.
+
 ## Security notes
 
-- **Blender MCP runs model-written Python inside Blender with no sandbox.** Connect it only to
-  scenes you have backed up. The add-on also requires Blender's "Allow Online Access" preference;
-  `setup-blender.sh` turns that on only with `--allow-online-access`.
+- **Blender MCP runs model-written Python inside Blender with no sandbox** (`execute_blender_code`
+  and its `_for_cli` variant execute whatever code the agent sends, with full file system access).
+  Connect it only to scenes you have backed up. The add-on also requires Blender's "Allow Online
+  Access" preference; `setup-blender.sh` turns that on only with `--allow-online-access`.
+- The `blender-to-roblox` scripts run Blender headless with your normal preferences (never
+  `--factory-startup` unless asked, so nothing can save factory settings over yours). The checks
+  and the preview never change the scene; the export writes only the FBX files you name.
 - **The Roblox Studio MCP server can read and change your open places**, run Luau and play-test.
   Connect only agents you trust.
 - **Rokit trusts tools before installing them.** `install-toolchain.sh --trust` skips Rokit's
   per-tool prompt for the versions pinned in `rokit.toml`; the skill asks before using it.
 - **Open Cloud API keys** are read from `ROBLOX_API_KEY`. The doctor reports only whether it is
-  set and never prints it. Keep the key out of the repository.
+  set and never prints it. `upload-asset.sh` hands it to curl through a temporary config file only
+  you can read, so it never appears in the process list, in output or in `--dry-run`. Give the key
+  only the Assets API (read and write), and keep it out of the repository. Uploads create assets on
+  your account and go through Roblox moderation; the skill asks before uploading.
 - The scripts never edit shell profiles or other harness configs on their own: they print the PATH
   line to add, and MCP registration happens only through `mcp-config.sh`, idempotently.
 
 ## Repository layout
 
 ```
-skills/            the product: roblox-setup/, roblox-doctor/ (SKILL.md, scripts/, references/, assets/)
+skills/            the product: roblox-setup/, roblox-doctor/, blender-to-roblox/ (SKILL.md, scripts/, references/, assets/)
 lib/common.sh      shared shell helpers; `make sync-lib` vendors it into each skill's scripts/lib/
 mcp/               servers.json (single description of both servers) and launch wrappers
 .claude-plugin/    Claude Code plugin and marketplace manifests
@@ -93,7 +122,8 @@ mcp/               servers.json (single description of both servers) and launch 
 commands/          /roblox:setup and /roblox:doctor
 install/           install.sh / uninstall.sh for Codex, pi, Oh My Pi
 tests/             bats-core suites (fake HOME, no network unless RDK_NETWORK_TESTS=1)
-scripts/           validate-skills.sh, release.sh
+evals/             `claude plugin eval` cases (paid model runs; see Development)
+scripts/           validate-skills.sh, validate-evals.sh, release.sh
 docs/PLAN.md       design and specification
 ```
 
@@ -101,7 +131,7 @@ docs/PLAN.md       design and specification
 
 ```sh
 brew install bats-core shellcheck jq
-make all          # check-sync, lint (shellcheck, JSON), validate (skills), test (bats)
+make all          # check-sync, lint (shellcheck, JSON, py_compile), validate (skills, evals), test (bats)
 ```
 
 - Edit `lib/common.sh`, never the vendored copies, then `make sync-lib`. `make check-sync` fails on
@@ -109,8 +139,15 @@ make all          # check-sync, lint (shellcheck, JSON), validate (skills), test
 - Tests run every script against a fake machine under a temp directory (`RDK_HOME`, `RDK_OS`,
   `RDK_STUDIO_APP`, `RDK_BLENDER_APP` and friends; see `lib/common.sh`). They never touch the real
   HOME. Opt-in suites: `RDK_NETWORK_TESTS=1` downloads the real Rokit and tools into the fake HOME;
-  `RDK_BLENDER_TESTS=1` (with `RDK_TEST_ADDON_ZIP=path/to/mcp-1.0.3.zip`, or network) installs the
-  add-on into a real Blender using temp user directories.
+  `RDK_BLENDER_TESTS=1` runs `check_mesh.py`, `export_fbx.py` and `render_preview.py` in a real
+  headless Blender on scenes built on the fly (`tests/fixtures/car_scene.py`), and (with
+  `RDK_TEST_ADDON_ZIP=path/to/mcp-1.0.3.zip`, or network) installs the add-on, always with Blender's
+  user folders in a temp directory (`RDK_REAL_BLENDER` picks the binary).
+- `evals/` holds `claude plugin eval` cases (`setup-empty-dir`, `doctor-missing-blender`,
+  `adopt-existing`, `check-mesh-report`). They are real, billed model runs, so they are not part of
+  `make all`; `scripts/validate-evals.sh` checks their structure instead. Run them with
+  `claude plugin eval . --scaffold --allow-tools Bash,Write` (add `--case <name>` for one);
+  `check-mesh-report` needs Blender on the machine (tag `requires-blender`).
 - `claude plugin validate .claude-plugin/plugin.json` and `claude plugin validate .` check the
   manifests; `scripts/release.sh X.Y.Z` bumps every version, dates the changelog, runs `make all`,
   commits and tags (it never pushes).

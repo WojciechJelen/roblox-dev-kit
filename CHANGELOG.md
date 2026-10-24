@@ -20,6 +20,18 @@ All notable changes to this project are documented here. The format follows
 - `install/install.sh` and `install/uninstall.sh` for Codex, pi and Oh My Pi.
 - bats-core test suites, `scripts/validate-skills.sh`, `scripts/release.sh` and CI on macOS and
   Linux.
+- `blender-to-roblox` skill: `run_blender.sh` (headless Blender, exit code passed through, never
+  `--factory-startup` by default), `check_mesh.py` (triangles after modifiers, textures, n-gons,
+  loose geometry, UVs, materials, transforms, sizes in studs and required names against Roblox's
+  limits), `export_fbx.py` (checks first, then FBX with Roblox's documented Blender settings, one
+  file or one per object), `render_preview.py` (Workbench preview that leaves the scene as it was)
+  and `upload-asset.sh` (Open Cloud Assets API with operation polling, retries on 429 and 5xx, the
+  key kept out of argv and output), plus references on Roblox's export rules, the workflow, the
+  Blender MCP tools and the Open Cloud Assets API, each fact with its source.
+- `evals/`: four `claude plugin eval` cases (`setup-empty-dir`, `doctor-missing-blender`,
+  `adopt-existing`, `check-mesh-report`) and `scripts/validate-evals.sh`, which checks their
+  structure in `make validate` without running them.
+- Opt-in real-Blender suites for `check_mesh.py` and `export_fbx.py` (`RDK_BLENDER_TESTS=1`).
 
 ### Fixed (pre-release review)
 
@@ -37,5 +49,6 @@ All notable changes to this project are documented here. The format follows
 - Claude Code's project `.mcp.json` counts as a registration and feeds the duplicate check (a
   plugin's own bundled `.mcp.json`, next to `.claude-plugin/plugin.json`, does not).
 - Wally and rokit.toml table headers with trailing comments are recognised.
+- `validate-skills.sh` also checks script names that contain underscores.
 - `RDK_ROJO_PORT` and `RDK_UVX` are overridable, so tests never depend on a running `rojo serve`
   or the real uvx; the kit's CI authenticates Rokit before downloading tools.

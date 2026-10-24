@@ -1,0 +1,15 @@
+schema_version: "1.1"
+name: check-mesh-report
+description: |
+  blender-to-roblox check on a saved car scene. REQUIRES BLENDER: the scaffold builds car.blend
+  with a real Blender (blender on PATH, or /Applications/Blender.app on macOS) and fails without
+  one. Needs --scaffold.
+expected_outcome: |
+  The agent checks car.blend with the blender-to-roblox skill's check_mesh.py (through
+  run_blender.sh, or the Blender MCP's *_for_cli tools) and reports each mesh's triangle count
+  against Roblox's 20,000-triangle limit: Body 12, Wheel_FR/RL/RR 124 each, and Wheel_FL 24,576
+  after its Subdivision Surface modifier, which is over the limit. It says the car is not ready
+  until Wheel_FL is reduced (lower subdivision level or Decimate), mentions the wheels' n-gon caps
+  as a warning, and neither changes nor exports the file.
+context:
+  scaffold_script: make-car.sh

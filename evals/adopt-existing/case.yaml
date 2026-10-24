@@ -1,0 +1,14 @@
+schema_version: "1.1"
+name: adopt-existing
+description: |
+  roblox-setup "adopt" mode on a small existing game whose README says where each script lives in
+  Studio. Plan only (dry run). Needs --scaffold to copy the fixture into the workspace.
+expected_outcome: |
+  The agent reads README.md, writes a tab-separated mapping file that sends each script to its
+  Studio location and class (Factory.lua -> ReplicatedStorage/RivalsFactory ModuleScript,
+  FX.lua -> ReplicatedStorage/RivalsFX ModuleScript, Server.server.lua ->
+  ServerScriptService/RivalsServer Script, Client.client.lua ->
+  StarterPlayer/StarterPlayerScripts/RivalsClient LocalScript), runs adopt.sh without --apply,
+  shows the user the planned moves and project tree, and asks before applying. No script moves.
+context:
+  scaffold_script: place-files.sh

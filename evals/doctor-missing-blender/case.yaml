@@ -1,0 +1,13 @@
+schema_version: "1.1"
+name: doctor-missing-blender
+description: |
+  roblox-doctor on a fake machine (RDK_* overrides in ./machine.env): Blender is installed in
+  Applications but not on PATH, and the official MCP add-on is missing. Needs --scaffold.
+expected_outcome: |
+  The agent runs the roblox-doctor skill's doctor.sh with machine.env sourced, reports that the
+  blender command is not on PATH although Blender is installed, and gives the fix: a symlink to the
+  Blender binary in ~/.local/bin (or the doctor's --fix, offered rather than run). It also reports
+  that the official Blender MCP add-on is not installed and points to roblox-setup's
+  setup-blender.sh. It changes nothing on the machine.
+context:
+  scaffold_script: make-machine.sh
