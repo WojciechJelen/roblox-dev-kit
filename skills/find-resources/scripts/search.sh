@@ -568,12 +568,14 @@ browse_links() {
         printf 'Poly Pizza\thttps://poly.pizza/search/%s\tCC0 or CC-BY per model\n' "$q_seg"
         printf 'itch.io assets\thttps://itch.io/search?q=%s&classification=assets\tper item (see its page)\n' "$q_uri"
         printf 'OpenGameArt (3D)\t%s\tper item\n' "$(oga 10)"
+        printf 'Fab (free Megascans)\thttps://www.fab.com\tFab Standard License (not CC): read it; no legacy Quixel assets\n'
         ;;
       texture)
         printf 'Poly Haven textures\thttps://polyhaven.com/textures\tCC0\n'
         printf 'ambientCG\thttps://ambientcg.com/list?q=%s\tCC0\n' "$q_uri"
         printf 'Kenney (textures)\thttps://kenney.nl/assets/category:Textures\tCC0\n'
         printf 'OpenGameArt (textures)\t%s\tper item\n' "$(oga 14)"
+        printf 'Fab (free Megascans)\thttps://www.fab.com\tFab Standard License (not CC): read it; no legacy Quixel assets\n'
         ;;
       hdri)
         printf 'Poly Haven HDRIs\thttps://polyhaven.com/hdris\tCC0; Roblox skies need six cube faces\n'

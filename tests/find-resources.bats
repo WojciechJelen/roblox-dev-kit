@@ -236,6 +236,7 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [[ "$output" == *"warning: polyhaven: no answer within 20 s"* ]]
   [[ "$output" == *"no source answered"* ]]
   [[ "$output" == *"Browse by hand"*"https://kenney.nl/assets/category:3D"* ]]
+  [[ "$output" == *"Fab (free Megascans)"*"Fab Standard License (not CC)"* ]]
 }
 
 @test "search: Poly Haven's search failing falls back to matching names and tags locally" {
