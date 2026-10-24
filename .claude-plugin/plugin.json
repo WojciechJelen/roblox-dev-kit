@@ -1,0 +1,11 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "roblox",
+  "version": "0.1.0",
+  "description": "Roblox game development with AI agents: Rokit/Rojo toolchain, strict-Luau project template, adopting existing games into Rojo, Roblox Studio and Blender MCP setup, and an environment doctor.",
+  "author": {
+    "name": "Wojciech Jelen"
+  },
+  "license": "MIT",
+  "keywords": ["roblox", "rojo", "luau", "rokit", "blender", "mcp", "roblox-studio"]
+}
