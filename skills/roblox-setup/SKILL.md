@@ -84,7 +84,10 @@ non-empty directory unless `--force`. The folder ↔ DataModel mapping is in
 [references/template-layout.md](references/template-layout.md).
 Right after scaffolding, offer the per-project install so the new game is ready for any harness:
 `scaffold.sh <dir> "<Project Name>" --install-kit` (or `--install-kit=codex` for one harness) runs
-`install.sh --harness all --project <dir>`. It is never done without the flag; ask first.
+`install.sh --harness all --project <dir>`; `--install-kit-args "--dry-run"` previews it, and
+`--no-warm` there skips the ~200 MB Blender server download. It is never done without the flag;
+ask first. `--project` always means the project's root folder; the scripts refuse a subfolder of
+a Rojo project unless `--force`.
 
 ### adopt
 For a game that already exists, the DataModel paths must stay the same so that nothing breaks.

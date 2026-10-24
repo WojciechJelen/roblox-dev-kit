@@ -39,6 +39,14 @@ All notable changes to this project are documented here. The format follows
   commands (`--no-plugin` for loose skills); `scaffold.sh --install-kit` installs into a new
   project when asked; the doctor judges MCP registrations for the project it runs in and only
   warns about a missing user-scope server outside a project.
+- Per-project review fixes: Codex project TOML is only ever extended into valid TOML (inline and
+  dotted server definitions count, results are checked with `tomllib` when available, risky forms
+  are left to the user); an empty or broken `.omp/mcp.json` no longer ends up empty or aborts the
+  run, and its mode is kept; plugin enablement follows Claude Code's local > project > user
+  precedence; `--project` uses physical paths and refuses Rojo subfolders (without `--force`) and
+  plugin folders; the doctor treats `--project` as a project and offers the plugin before a loose
+  Blender server; `uninstall.sh --project` shows project-scope removal commands; `scaffold.sh`
+  validates `--install-kit` first and passes `--install-kit-args` on.
 
 ### Fixed (pre-release review)
 

@@ -40,13 +40,18 @@ install/install.sh --harness all --project path/to/game
 ```
 
 - Codex, pi and Oh My Pi: skills in `game/.agents/skills/`; MCP servers in the project's
-  `.codex/config.toml`, `.pi/mcp.json` and `.omp/mcp.json` (Oh My Pi also imports the first two).
+  `.codex/config.toml`, `.pi/mcp.json` and `.omp/mcp.json` (Oh My Pi imports `.mcp.json` and
+  `.codex/config.toml` itself, so it usually needs no file of its own).
 - Claude Code: the script prints the project-scope plugin commands to run from the game folder,
   `claude plugin marketplace add /path/to/roblox-dev-kit --scope project` and
   `claude plugin install roblox@roblox-dev-kit --scope project` (they write `.claude/settings.json`),
   and puts Roblox Studio's server in `.mcp.json`; the plugin brings the Blender server. `--no-plugin`
   links loose skills into `.claude/skills/` instead.
-- A new game: `skills/roblox-setup/scripts/scaffold.sh path/to/game "My Game" --install-kit`.
+- A new game: `skills/roblox-setup/scripts/scaffold.sh path/to/game "My Game" --install-kit`
+  (`--install-kit-args "--dry-run --no-warm"` passes options on; the Blender server download is
+  about 200 MB unless `--no-warm`).
+- `--project` must be the project's root folder (the one with `default.project.json`), because
+  agents read project files from the folder they start in; a subfolder needs `--force`.
 - MCP only: `skills/roblox-setup/scripts/mcp-config.sh --harness <h> --project path/to/game`.
 
 Codex and pi read project MCP files only once you trust the project, and Claude Code asks once to
