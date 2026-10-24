@@ -1,0 +1,13 @@
+# Toolchain for {{PROJECT_NAME}}. Everyone gets the same versions with: rokit install
+# Pinned to the latest GitHub release of each tool, looked up via the GitHub releases API on 2026-10-24.
+# Update deliberately: rokit update <tool>, then commit this file.
+
+[tools]
+rojo = "rojo-rbx/rojo@7.7.1"
+wally = "UpliftGames/wally@0.3.2"
+lune = "lune-org/lune@0.11.1"
+stylua = "JohnnyMorganz/StyLua@2.6.0"
+selene = "Kampfkarren/selene@0.32.0"
+luau-lsp = "JohnnyMorganz/luau-lsp@1.70.1"
+zap = "red-blox/zap@0.6.29"
+asphalt = "jacktabscode/asphalt@2.0.2"

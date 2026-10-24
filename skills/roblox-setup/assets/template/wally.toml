@@ -1,0 +1,20 @@
+[package]
+name = "local/{{PACKAGE_NAME}}"
+version = "0.1.0"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+private = true
+
+# Add packages only when the game needs them; run `wally install` afterwards.
+# Verified coordinates and when to add each library: the roblox-setup skill's references/libraries.md.
+
+[dependencies]
+# Shared (client + server), installed into Packages/ -> ReplicatedStorage.Packages
+# Charm = "littensy/charm@0.11.1"
+
+[server-dependencies]
+# Server only, installed into ServerPackages/ -> ServerScriptService.ServerPackages
+# ProfileStore = "lm-loleris/profilestore@1.0.3"
+
+[dev-dependencies]
+# Tests only, installed into DevPackages/

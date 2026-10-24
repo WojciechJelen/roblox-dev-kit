@@ -1,0 +1,30 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/ReplicatedStorage/Shared"
+      },
+      "Packages": {
+        "$path": { "optional": "Packages" }
+      }
+    },
+    "ServerScriptService": {
+      "$path": "src/ServerScriptService",
+      "ServerPackages": {
+        "$path": { "optional": "ServerPackages" }
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "src/StarterPlayerScripts"
+      }
+    },
+    "HttpService": {
+      "$properties": {
+        "HttpEnabled": false
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$comment": "Single description of the MCP servers this kit registers. Consumed by skills/roblox-setup/scripts/mcp-config.sh (via the copy in skills/roblox-setup/assets/mcp-servers.json, kept in sync by `make sync-lib`) and mirrored by /.mcp.json. Placeholders: {studio_mcp_bin} and {blender_bin} are resolved on the target machine; a bare command is resolved to an absolute path when found. An env entry whose placeholder cannot be resolved is dropped.",
+  "servers": {
+    "Roblox_Studio": {
+      "description": "Roblox Studio's built-in MCP server: read and edit the open place, run Luau, play-test, generate assets",
+      "homepage": "https://create.roblox.com/docs/studio/mcp",
+      "command": "{studio_mcp_bin}",
+      "args": [],
+      "env": {},
+      "wrapper": "mcp/studio-mcp.sh",
+      "register": "if-missing",
+      "claudePlugin": false
+    },
+    "blender": {
+      "description": "Official Blender MCP server (Blender Lab) v1.0.3: inspect scenes, run Python, render previews; talks to the Blender add-on on localhost:9876",
+      "homepage": "https://projects.blender.org/lab/blender_mcp",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://projects.blender.org/lab/blender_mcp.git@v1.0.3#subdirectory=mcp",
+        "blender-mcp"
+      ],
+      "env": {
+        "BLENDER_PATH": "{blender_bin}"
+      },
+      "wrapper": "mcp/blender-mcp.sh",
+      "register": "if-missing",
+      "claudePlugin": true
+    }
+  }
+}

@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rokit
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/rojo-rbx/rokit/v1.2.0/scripts/install.sh | GITHUB_PAT="$GITHUB_TOKEN" bash -s -- 1.2.0
+          echo "$HOME/.rokit/bin" >> "$GITHUB_PATH"
+
+      - name: Install tools from rokit.toml
+        run: |
+          # Authenticated requests avoid GitHub's anonymous rate limit on shared runners.
+          rokit authenticate github --token "$GITHUB_TOKEN" --skip-verify
+          rokit install --no-trust-check
+
+      - name: Format (StyLua)
+        run: stylua --check src
+
+      - name: Lint (Selene)
+        run: selene src
+
+      - name: Packages and sourcemap
+        run: |
+          wally install
+          rojo sourcemap default.project.json -o sourcemap.json
+
+      - name: Type check (luau-lsp)
+        run: |
+          curl -fsSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau
+          luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json \
+            --definitions=@roblox=globalTypes.d.luau \
+            --ignore="Packages/**" --ignore="ServerPackages/**" --ignore="DevPackages/**" \
+            src
+
+      - name: Build place (Rojo)
+        run: rojo build default.project.json -o build.rbxl
