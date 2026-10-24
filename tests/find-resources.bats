@@ -407,6 +407,18 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   grep -qxF '| Brick \| 4 [31mRED[0m | Rob[2J Tuytel | CC0 | https://polyhaven.com/a/brick_4 |' "$FAKE/home/CREDITS.md"
 }
 
+@test "fetch: downloading again at another resolution replaces the old files" {
+  polyhaven_routes
+  run bash "$FETCH" polyhaven:brick_4
+  [ "$status" -eq 0 ]
+  touch "$FAKE/home/assets/third-party/polyhaven/brick_4/my-notes.txt" # not the script's: kept
+  run bash "$FETCH" polyhaven:brick_4 --res 2k --force
+  [ "$status" -eq 0 ]
+  d="$FAKE/home/assets/third-party/polyhaven/brick_4"
+  [ "$(ls "$d" | LC_ALL=C sort | tr '\n' ' ')" = "SOURCE.json brick_4_arm_2k.jpg brick_4_diff_2k.jpg brick_4_nor_gl_2k.jpg brick_4_rough_2k.jpg my-notes.txt " ]
+  [ "$(jq -r '[.files[].file] | join(" ")' "$d/SOURCE.json")" = "brick_4_diff_2k.jpg brick_4_nor_gl_2k.jpg brick_4_rough_2k.jpg brick_4_arm_2k.jpg" ]
+}
+
 @test "fetch: a checksum mismatch fails and leaves no files" {
   polyhaven_routes
   jq '.Rough["1k"].jpg.md5 = "0000"' "$FAKE/routes/polyhaven-files-brick_4.json" >"$FAKE/routes/x" && mv "$FAKE/routes/x" "$FAKE/routes/polyhaven-files-brick_4.json"
@@ -435,7 +447,7 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   run bash "$FETCH" ambientcg:Bricks100 --out "$FAKE/home/game/assets"
   [ "$status" -eq 0 ]
   d="$FAKE/home/game/assets/ambientcg/Bricks100"
-  [ "$(ls "$d" | tr '\n' ' ')" = "Bricks100_1K-JPG_Color.jpg Bricks100_1K-JPG_NormalGL.jpg Bricks100_1K-JPG_Roughness.jpg SOURCE.json " ]
+  [ "$(ls "$d" | LC_ALL=C sort | tr '\n' ' ')" = "Bricks100_1K-JPG_Color.jpg Bricks100_1K-JPG_NormalGL.jpg Bricks100_1K-JPG_Roughness.jpg SOURCE.json " ]
   [[ "$output" == *"skipping ../Bricks100_1K-JPG_Metalness.jpg"* ]]
   [ ! -e "$FAKE/home/game/assets/ambientcg/Bricks100_1K-JPG_Metalness.jpg" ]
   [ "$(find "$FAKE" -name '*Metalness*' | wc -l | tr -d ' ')" -eq 0 ]

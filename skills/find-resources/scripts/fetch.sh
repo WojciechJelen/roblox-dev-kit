@@ -307,8 +307,15 @@ else
   for f in "$tmp/stage"/*; do
     [ ! -L "$f" ] || rdk_die "refusing $(basename "$f"): it is a link"
   done
-  # Replace the folder's previous copy only once everything downloaded.
+  # Replace the folder's previous copy only once everything downloaded: first the files the old
+  # SOURCE.json lists (another resolution leaves other names), then the new set.
   mkdir -p "$dest"
+  if [ -f "$dest/SOURCE.json" ]; then
+    while IFS= read -r f; do
+      case $f in '' | -* | *[!A-Za-z0-9_.-]* | SOURCE.json) continue ;; esac
+      rm -f "$dest/$f"
+    done <<<"$(jq -r '.files[]?.file? | strings' "$dest/SOURCE.json" 2>/dev/null || true)"
+  fi
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     mv -f "$tmp/stage/$f" "$dest/$f"
