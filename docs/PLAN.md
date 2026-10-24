@@ -14,48 +14,63 @@ The stack being set up is described in `skills/roblox-setup/references/stack.md`
 
 ## 1. Verified environment facts (macOS, 2026-10-24)
 
-Use these; do not re-derive or guess. Where something is marked *verify*, check it on the machine or the source before relying on it.
+Use these; do not re-derive or guess. Everything below was checked on this machine or in the upstream source during Phase 1 (the former *verify* items are resolved).
 
 ### Harnesses installed
 | Harness | Version | Skills dirs | MCP config | Notes |
 |---|---|---|---|---|
-| Claude Code | 2.1.310 | plugin `skills/`; `~/.claude/skills/` | `~/.claude.json` (user/project scope), plugin `.mcp.json` | CLI: `claude plugin validate|install|eval|init`, `claude mcp add|add-json|get|list|remove` |
-| Codex CLI | 0.163.0 | `.agents/skills/` (repo), `~/.agents/skills/`, `~/.codex/skills/` | `~/.codex/config.toml` `[mcp_servers.<name>]` | already has `[mcp_servers.Roblox_Studio]`; `codex mcp add` exists (*verify flags*) |
-| pi | 1.1.0 | `~/.pi/agent/skills/`, `~/.agents/skills/`, `.pi/skills/` | `~/.pi/agent/mcp.json`, project `.pi/mcp.json` (after trust) | native MCP: stdio + streamable HTTP, `pi mcp add|remove|list`, `/mcp`, `/reload` (*verify file format via `pi mcp add --help`*) |
-| Oh My Pi (`omp`) | 18.12.6 | likely same as pi (*verify*) | `~/.omp/agent/mcp.json` (exists), project `.omp/mcp.json`; imports `~/.claude.json`, `~/.codex/config.toml`, installed Claude marketplace plugins | `/mcp add|list|reload|test` |
+| Claude Code | 2.1.310 | plugin `skills/`; `~/.claude/skills/` | user and local scope in `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set), project `./.mcp.json`, plugin `.mcp.json` | `claude mcp add-json [-s local\|user\|project] <name> '<json>'` with `{"type":"stdio","command","args","env"}`; `claude plugin validate\|install\|tag\|init` |
+| Codex CLI | 0.163.0 | `.agents/skills/` (repo), `~/.agents/skills/`, `~/.codex/skills/` | `${CODEX_HOME:-~/.codex}/config.toml` `[mcp_servers.<name>]` + `[mcp_servers.<name>.env]` | `codex mcp add <NAME> [--env K=V]... -- <COMMAND> [ARGS...]` (or `--url`); **silently replaces** an existing entry; already has `Roblox_Studio` |
+| pi | 1.1.0 | `~/.pi/agent/skills/`, `~/.agents/skills/`, `.pi/skills/` | `~/.pi/agent/mcp.json` `{"mcpServers":{"<n>":{"command","args","env","description"}}}`, project `.pi/mcp.json` (after trust) | `pi mcp add <server> [--description T] [--env K=V]... [--cwd D] [-l] -- <command> [args...]`; **silently replaces**; `pi mcp list\|remove`, `/reload` |
+| Oh My Pi (`omp`) | 18.12.6 | native `.omp` roots plus `~/.agents/skills/` (`.agents` roots are native, no opt-in) | `~/.omp/agent/mcp.json` `{"$schema": ".../oh-my-pi/.../mcp-schema.json", "mcpServers": {"<n>": {"type":"stdio","command","args","env","cwd"}}}` (http: `{"type":"http","url"}`); project `.omp/mcp.json` | **no `mcp` CLI subcommand** (only `/mcp add\|list\|reload\|test` in the TUI). Imports: see below |
 
-`~/.agents/skills/` exists and already holds many skills → it is the shared install target for Codex + pi (+ probably OMP).
+`~/.agents/skills/` exists and already holds many skills → it is the shared install target for Codex, pi and OMP.
+
+**OMP MCP imports** (OMP `docs/settings.md`, `docs/mcp-config.md`, `model-settings.ts`): OMP reads its native `mcp.json` first, then other tools' configs; across sources the first definition of a name wins and duplicates are not merged. *Project-level* sources (`<project>/.mcp.json`, `<project>/.codex/config.toml`, `.claude/.mcp.json`) are imported by default unless `mcp.enableProjectConfig: false`. *Foreign user-level* sources (`~/.claude.json`, `~/.codex/config.toml`, Claude Code's user plugin registry) are imported only when `enabledProviders` in `~/.omp/agent/config.yml` lists them (`claude`, `codex`, `*`/`all`; default `[]`; `claude` also enables `claude-plugins`; a set `CLAUDE_CONFIG_DIR` opts Claude in); `disabledProviders` wins. This machine's `config.yml` has no `enabledProviders`, so OMP does **not** see the Claude/Codex `Roblox_Studio` entries.
 
 ### Roblox Studio
 - App: `/Applications/RobloxStudio.app`
-- Built-in MCP server binary (stdio, no args): `/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`
+- Built-in MCP server binary (stdio, no args): `/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`. Windows (from the docs): `cmd.exe /c %LOCALAPPDATA%\Roblox\mcp.bat`.
 - Registered in Claude Code (user scope) and Codex under the name **`Roblox_Studio`** — this is the name Studio's own "Quick connect" uses. Reuse it; never create a second Studio server.
-- Studio plugins folder (macOS): `~/Documents/Roblox/Plugins` (does not exist yet → Rojo Studio plugin not installed). `rojo plugin install` creates it.
-- Official docs: https://create.roblox.com/docs/studio/mcp
+- Enabling it in Studio: Assistant → … → Manage MCP Servers → "Enable Studio as MCP server" (https://create.roblox.com/docs/studio/mcp).
+- Studio plugins folder (macOS): `~/Documents/Roblox/Plugins` (does not exist yet → Rojo Studio plugin not installed). `rojo plugin install` creates it and writes **`RojoManagedPlugin.rbxm`** (Rojo 7.7.1 `src/cli/plugin.rs`).
+- Process check: `pgrep -x RobloxStudio` (`pgrep -f` would also match `StudioMCP`).
 
 ### Blender
 - Binary: `/Applications/Blender.app/Contents/MacOS/Blender`, **5.2.1 LTS**, bundled Python 3.13. **Not on PATH.**
 - `~/.local/bin` exists and **is on PATH** → `blender` symlink target for `--fix`.
-- Headless probe confirmed: `bpy.ops.extensions.package_install_files` and `bpy.ops.preferences.extension_repo_add` exist.
 - User extensions dir: `~/Library/Application Support/Blender/5.2/extensions` (not created yet). Repos: `extensions.blender.org` (module `blender_org`), `User Default` (module `user_default`), `System`.
-- Blender honours `BLENDER_USER_RESOURCES` / `BLENDER_USER_CONFIG` / `BLENDER_USER_EXTENSIONS` env vars → use them to test add-on installation in a temp dir.
+- Blender honours `BLENDER_USER_RESOURCES` / `BLENDER_USER_CONFIG` / `BLENDER_USER_EXTENSIONS` env vars → used to test add-on installation in a temp dir.
+- Add-on install that works on 5.2.1 (background, normal prefs loaded, **never** `--factory-startup`, which would save factory prefs over the user's):
+  `bpy.ops.extensions.package_install_files(filepath=ZIP, repo="user_default", enable_on_install=True, overwrite=True)` → `{'FINISHED'}`. Operator properties: `filter_glob`, `directory`, `files`, `filepath`, `repo` (dynamic enum), `enable_on_install` (default True), `target`, `overwrite` (default True), `url`. Then `prefs.addons["bl_ext.user_default.mcp"].preferences.use_autostart = True`, optionally `prefs.system.use_online_access = True`, `bpy.ops.wm.save_userpref()`; persists across processes.
+- Result: add-on at **`<extensions>/user_default/mcp`**, module **`bl_ext.user_default.mcp`**.
 - No GNU `timeout`/`gtimeout` on this Mac → do not use `timeout` in scripts.
 
 ### Official Blender MCP (Blender Lab) — the default Blender server
 - Repo: https://projects.blender.org/lab/blender_mcp (Gitea). HTML pages are behind a Cloudflare challenge for curl (403); **raw files, the API (`/api/v1/repos/lab/blender_mcp/...`) and release downloads work** with a browser-like `User-Agent`.
-- Latest release **v1.0.3**. Assets:
-  - `mcp-1.0.3.zip` (18 KB) = **the Blender add-on** (extension zip; `blender_manifest.toml`: id `mcp`, `blender_version_min = "5.1.0"`, permission `network`). URL: `https://projects.blender.org/lab/blender_mcp/releases/download/v1.0.3/mcp-1.0.3.zip`
+- Latest release **v1.0.3** (tag → commit `2cea8d56`). Assets:
+  - `mcp-1.0.3.zip` (17975 bytes, sha256 `a7a9da816192502e5a0a202a396444e266b47d8fc4f74ad4698048bd43040707`) = **the Blender add-on** (`blender_manifest.toml`: id `mcp`, `blender_version_min = "5.1.0"`, permission `network`). URL: `https://projects.blender.org/lab/blender_mcp/releases/download/v1.0.3/mcp-1.0.3.zip`
   - `blender-1.0.3.mcpb` = server bundle for `.mcpb` clients (Claude Desktop). Not needed.
-- Server: Python package in `mcp/` subdirectory, entry point `blender-mcp` (`blmcp:main`), `requires-python >= 3.10`, deps `mcp[cli]`, `docutils`, `pyyaml`. Launch:
+- Server: Python package in `mcp/` subdirectory, entry point `blender-mcp` (`blmcp:main`, argparse: `--help` exits 0), `requires-python >= 3.10`, deps `mcp[cli]`, `docutils`, `pyyaml`. Launch:
   `uvx --from "git+https://projects.blender.org/lab/blender_mcp.git@v1.0.3#subdirectory=mcp" blender-mcp`
-- Add-on ↔ server: TCP `localhost:9876` (env `BLENDER_MCP_HOST`, `BLENDER_MCP_PORT` on the server side). Add-on prefs: host, port, **Auto Start**, start/stop operators, polling intervals.
-- Tools (from `readme_tools.rst`): `execute_blender_code`, `get_blendfile_summary_*`, `get_object_detail_summary`, `get_objects_summary`, `get_python_api_docs`, `search_api_docs`, `search_manual_docs`, `get_screenshot_of_area_as_image`, `get_screenshot_of_window_as_image|json`, `jump_to_*`, `render_thumbnail_to_path`, `render_viewport_to_path`. Every summary/execute tool has a `*_for_cli` variant that opens a `.blend` in a **background Blender process** (no live Blender needed).
+  **Cold start ≈ 46 s (≈ 210 MB clone), warm ≈ 4 s** → MCP clients time out on the first start unless uv's cache is warmed (`... blender-mcp --help`).
+- Server env: `BLENDER_MCP_HOST`, `BLENDER_MCP_PORT` (add-on connection); `BLENDER_PATH` (Blender binary for the `*_for_cli` tools; default `blender` on PATH).
+- Add-on ↔ server: TCP `localhost:9876`. Add-on prefs: `host`, `port`, `use_autostart` (**Auto Start, default on**), `autostart_delay`, polling intervals. The add-on **refuses to start its server while Preferences › System › Network › "Allow Online Access" is off** (`use_online_access`, off by default). Headless serving: `blender --background [file.blend] --command blender_mcp [--port N]`.
+- Tools (26, confirmed end to end): `execute_blender_code`, `get_blendfile_summary_*`, `get_object_detail_summary`, `get_objects_summary`, `get_python_api_docs`, `search_api_docs`, `search_manual_docs`, `get_screenshot_of_area_as_image`, `get_screenshot_of_window_as_image|json`, `jump_to_*`, `render_thumbnail_to_path`, `render_viewport_to_path`. Every summary/execute tool has a `*_for_cli` variant that opens a `.blend` in a **background Blender process** (no live Blender needed).
 - Security: executes LLM-generated Python in Blender without guards. Say so in docs.
-- Community alternative `ahujasid/blender-mcp` (PyPI `blender-mcp`, `uvx blender-mcp`, `addon.py`; Poly Haven, Sketchfab, Hyper3D Rodin, Hunyuan3D) uses the **same port 9876** → optional only, never both at once.
+- Community alternative `ahujasid/blender-mcp` ("MCP for Blender", `addon.py`, code uses `blendermcp_*` names) uses the **same port 9876** → optional only, never both at once. Its installer also registers a server named `blender`.
+
+### Rokit
+- Latest **1.2.0**. The official installer (`scripts/install.sh`, pinned via the `v1.2.0` tag URL) takes only a positional version (fetches tag `v$1`) and `GITHUB_PAT`; **there is no no-modify-path option**. It runs `rokit self-install`, which always appends `. "$HOME/.rokit/env"` to `~/.profile`, `~/.bashrc` and `~/.zshenv` (creating the one matching `$SHELL`). `ROKIT_ROOT` overrides the store location independently of `$HOME` → `install-toolchain.sh` runs the installer with `ROKIT_ROOT=<real store>` and `HOME=<throwaway dir>` so the appends land in the throwaway dir.
+- Trust: `rokit install`/`add` prompt per untrusted tool and **bail when stderr is not a TTY**. `rokit install --no-trust-check` installs without recording trust (later plain installs prompt again); `rokit trust <owner/repo>...` records it. `rokit authenticate github --token T --skip-verify` avoids anonymous API limits.
+- Pinned in the template `rokit.toml` (GitHub releases API, 2026-10-24): `rojo-rbx/rojo@7.7.1`, `UpliftGames/wally@0.3.2`, `lune-org/lune@0.11.1`, `JohnnyMorganz/StyLua@2.6.0`, `Kampfkarren/selene@0.32.0`, `JohnnyMorganz/luau-lsp@1.70.1`, `red-blox/zap@0.6.29`, `jacktabscode/asphalt@2.0.2`. All install and the template passes `stylua --check`, `selene`, strict `luau-lsp analyze` and `rojo build` with them.
+
+### Rojo
+- A project node with `$path` gets `$ignoreUnknownInstances = false` unless set (7.7.1 `snapshot_middleware/project.rs:285-291`): Rojo deletes instances it does not know about under it. `"$path": {"optional": "Packages"}` makes a missing folder legal.
 
 ### Toolchain state
-Present: `uv`/`uvx` (`/opt/homebrew/bin`), node 24, git 2.50, `shellcheck`, `jq`, `python3`, Homebrew.
-Missing: `rokit`, `rojo`, `wally`, `lune`, `stylua`, `selene`, `luau-lsp`, `zap`, `asphalt`, `bats`.
+Present: `uv`/`uvx` (`/opt/homebrew/bin`), node 24, git 2.50, `shellcheck`, `jq` (also `/usr/bin/jq` on macOS), `python3`, Homebrew, `bats` 1.14.0 (installed for Phase 1).
+Missing: `rokit`, `rojo`, `wally`, `lune`, `stylua`, `selene`, `luau-lsp`, `zap`, `asphalt`.
 
 ---
 
@@ -131,11 +146,11 @@ Why vendor: `npx skills add`, Codex, pi and OMP install skill folders individual
 ## 4. `roblox-setup` skill
 
 ### Modes (SKILL.md decides, scripts execute)
-1. **toolchain** — `install-toolchain.sh`: install Rokit via its official installer if missing (read the installer options from the Rokit README; use the no-modify-path option if one exists), then `rokit install` in the project (or `rokit add --global` for a global toolchain when no project). Prints the PATH line the user must add; **never edits `~/.zshrc`/`~/.bashrc`**.
+1. **toolchain** — `install-toolchain.sh [--project DIR | --global | --rokit-only] [--trust]`: install Rokit 1.2.0 via its official installer if missing (no no-modify-path option exists, so the installer runs with a throwaway `HOME` and the real `ROKIT_ROOT`, §1), then `rokit install` in the project (or `rokit add --global` for a global toolchain when no project). `--trust` first records trust with `rokit trust <owner/repo>...` (needed without a TTY; the agent asks the user). Prints the PATH line the user must add; **never edits `~/.zshrc`/`~/.bashrc`**.
 2. **new** — `scaffold.sh <dir> <name>`: copy `assets/template`, substitute `{{PROJECT_NAME}}`, `git init` if not a repo, generate `sourcemap.json` if rojo is available. Refuses to overwrite a non-empty dir unless `--force`.
 3. **adopt** — `adopt.sh <dir> --mapping <tsv>`: for an existing project with loose scripts (e.g. Motor Rivals: `src/Factory.lua → ReplicatedStorage.RivalsFactory (ModuleScript)`). The **agent** writes the mapping file (from README/Studio tree); the **script** turns it into `default.project.json` + moves/renames files (`.server.lua` / `.client.lua` / ModuleScript rules). Keeps `.lua` extensions as-is. Dry-run by default, `--apply` to execute.
-4. **mcp** — `mcp-config.sh --harness <h>`: registers servers per §5 using the harness's own CLI when it exists (`claude mcp add-json`, `codex mcp add`, `pi mcp add`), writing JSON only for OMP. Idempotent: skips servers already present under the expected name. `--dry-run` prints what it would do.
-5. **blender** — `setup-blender.sh`: download `mcp-<ver>.zip` (pinned, checksum recorded in the script once known), install with `Blender --background --python-expr` using `bpy.ops.extensions.package_install_files(filepath=…, repo='user_default', enable_on_install=True)` (*verify exact args on 5.2*), enable Auto Start in the add-on preferences and save prefs; create `~/.local/bin/blender` symlink if `blender` not on PATH. Refuse if Blender < 5.1. Warn if the community `blender-mcp` add-on is also installed (port clash).
+4. **mcp** — `mcp-config.sh --harness <h>`: registers servers per §5 using the harness's own CLI when it exists (`claude mcp add-json`, `codex mcp add`, `pi mcp add`), writing JSON only for OMP. Idempotent: skips servers the harness already gets under the expected name (including OMP imports, §5). Warms uv's cache after registering `blender` (`--no-warm` skips). `--dry-run` prints what it would do.
+5. **blender** — `setup-blender.sh`: download `mcp-<ver>.zip` (pinned, sha256 checked), install with `Blender --background --python-exit-code 1 --python-expr` using `bpy.ops.extensions.package_install_files(filepath=…, repo='user_default', enable_on_install=True, overwrite=True)` (verified on 5.2.1, §1), enable Auto Start in the add-on preferences (optionally "Allow Online Access" with `--allow-online-access`) and save prefs; create `~/.local/bin/blender` symlink if `blender` not on PATH; warm uv's cache for the server. Refuse if Blender < 5.1 or while Blender is running. Warn if the community `blender-mcp` add-on is also installed (port clash).
 6. Finish: run `roblox-doctor`'s `doctor.sh` (if the sibling skill is installed) or print the equivalent checklist. **Setup is done when doctor is green.**
 
 ### Template (`assets/template/`)
@@ -159,10 +174,14 @@ For each optional lib — ProfileStore, Zap (CLI, not Wally), React-lua, Charm, 
 
 | Server | Name | Where it is registered | Why |
 |---|---|---|---|
-| Roblox Studio | `Roblox_Studio` | per harness by `mcp-config.sh`, **only if missing** | Studio's Quick connect already creates it under this name in Claude Code and Codex; a plugin-bundled copy would duplicate every Studio tool |
-| Blender (official) | `blender` | Claude Code: bundled in plugin `.mcp.json` (appears as `plugin_roblox_blender`); other harnesses: `mcp-config.sh` | plugin users get it on enable; `mcp-config.sh --harness claude` adds it only when the plugin is not installed |
+| Roblox Studio | `Roblox_Studio` | per harness by `mcp-config.sh`, **only if the harness does not already get it** | Studio's Quick connect already creates it under this name in Claude Code and Codex; a plugin-bundled copy would duplicate every Studio tool |
+| Blender (official) | `blender` | Claude Code: bundled in plugin `.mcp.json` (appears as `plugin_roblox_blender`); other harnesses: `mcp-config.sh` | plugin users get it on enable; `mcp-config.sh --harness claude` adds it only when the plugin is not enabled |
 
-`mcp/servers.json` is the single description (`command`, `args`, `env`, `description`, `homepage`), consumed by `mcp-config.sh` and mirrored by `.mcp.json`. Wrapper scripts (`mcp/*.sh`) exist so `.mcp.json` can use `${CLAUDE_PLUGIN_ROOT}` and so the Studio binary can be located per OS.
+"Already gets it" means: Claude Code user or local scope, or the project's `./.mcp.json`; Codex and pi their user config; OMP its native `mcp.json`, the project files it imports by default (`./.mcp.json`, `./.codex/config.toml`), or the Claude Code / Codex user configs (and Claude Code plugins) when `enabledProviders` opts them in (§1). `doctor.sh` reports the source it found.
+
+`mcp/servers.json` is the single description (`command`, `args`, `env`, `description`, `homepage`), vendored into `skills/roblox-setup/assets/mcp-servers.json` by `make sync-lib` (installed skill folders do not contain `mcp/`) and consumed by `mcp-config.sh`, which registers absolute commands (StudioMCP path; absolute `uvx` plus `BLENDER_PATH`). `.mcp.json` runs the wrapper through bash (`"command": "bash", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/blender-mcp.sh"]`) so it does not depend on the exec bit surviving plugin caching; wrapper scripts (`mcp/*.sh`) locate the binaries per OS.
+
+Because a cold `uvx` start (≈ 46 s) exceeds MCP client start-up timeouts, `setup-blender.sh` and `mcp-config.sh` (after registering `blender`, or when the plugin provides it) run `uvx --from <spec> blender-mcp --help` once to warm uv's cache; `--no-warm` skips it.
 
 ---
 
@@ -178,7 +197,7 @@ Each check: `id`, `section`, `status` (`ok|warn|fail|skip`), `detail`, `fix` (hu
 | toolchain | rokit on PATH (fail); `~/.rokit/bin` on PATH (warn); each tool in `rokit.toml` (project) or the standard set (global) resolves (fail) and matches pinned version (warn); git (fail); uv/uvx (warn) |
 | project (only if `default.project.json` found upward) | `rokit.toml`, `wally.toml`, `.luaurc`, `selene.toml`, `stylua.toml` present (warn); `Packages/` present when wally.toml has deps (warn); `sourcemap.json` newer than newest `src/**` file (warn); git repo (warn); `rojo serve` listening on 34872 (info → `ok`/`skip` with detail) |
 | studio | Studio app installed (fail); StudioMCP binary found (fail); Rojo Studio plugin in `~/Documents/Roblox/Plugins` (warn); Studio running (info) |
-| blender | `blender` on PATH (fail; fix = symlink into `~/.local/bin`); version ≥ 5.1 (fail; official add-on needs it); official add-on dir present under `<ext dir>/user_default/mcp` (*verify actual path after one real install*) (fail); add-on TCP port reachable (warn: "Blender not running or Auto Start off"); community add-on also installed (warn: port clash); uvx can resolve the server — only with `RDK_NETWORK_TESTS=1`/`--online` (skip otherwise) |
+| blender | `blender` on PATH (fail; fix = symlink into `~/.local/bin`); version ≥ 5.1 (fail; official add-on needs it); official add-on dir present under `<ext dir>/user_default/mcp` (confirmed by a real install) (fail); add-on TCP port reachable (warn: "Blender not running or Auto Start off"); community add-on also installed (warn: port clash); uvx can resolve the server — only with `RDK_NETWORK_TESTS=1`/`--online` (skip otherwise) |
 | mcp | for each **installed** harness: `Roblox_Studio` registered (fail), `blender` registered or plugin enabled (fail); duplicates (warn). Harness not installed → `skip` |
 | cloud | `ROBLOX_API_KEY` set (warn; never print value); `ROBLOX_CREATOR_TYPE`/`ROBLOX_CREATOR_ID` set (warn) |
 
@@ -222,3 +241,17 @@ Follow the Agent Skills spec and the `skill-creator` skill's guidance: frontmatt
 
 ## 12. Non-goals for v1
 Windows support beyond path stubs; roblox-ts; publishing/CI for the *game* beyond the template workflow; custom pi/OMP extensions; the community Blender server beyond an optional profile.
+
+## 13. Deviations from the original plan (Phase 1)
+
+- `plugin.json` has no `skills` key: the manifest key *adds* to the default `skills/` scan, so listing `./skills` would be redundant.
+- `mcp-config.sh` registers absolute commands, not `mcp/*.sh`: installed skill folders do not contain the repo's `mcp/`; `servers.json` is vendored into the setup skill instead.
+- OMP gets its own `mcp.json` entries unless it already imports the server (project files by default, user configs only via `enabledProviders`); the plan assumed automatic user-level imports.
+- `install-toolchain.sh` swaps `HOME` while running the Rokit installer, because `self-install` edits shell profiles with no opt-out.
+- `install-toolchain.sh --trust` runs `rokit trust` for the pinned tools and then a plain install (non-TTY Rokit refuses untrusted tools; `--no-trust-check` would not record trust). `--rokit-only` lets CI authenticate before the downloads.
+- `setup-blender.sh` adds `--allow-online-access` (the add-on needs Blender's Online Access), refuses while Blender runs unless `--force`, adds `--zip`, `--no-symlink`, `--no-warm`, and warms uv's cache.
+- `adopt.sh` writes one project node per script under services with `$ignoreUnknownInstances: true` instead of mapping services to folders (a `$path` service would delete Studio-made content); it rejects `.`/`..`/backslash path segments; `--with-config` writes a non-strict `.luaurc` for existing code.
+- Template: `"$path": {"optional": ...}` for `Packages`/`ServerPackages`; `{{PACKAGE_NAME}}` placeholder (Wally needs kebab-case); `[dev-dependencies]`; extra `.gitignore` entries; template CI uses the official Rokit installer rather than a third-party action.
+- Windows Studio stub uses the documented `%LOCALAPPDATA%\Roblox\mcp.bat`.
+- Extra overrides (`RDK_OS`, `RDK_NO_JQ`, `RDK_LOCAL_BIN`, `RDK_STUDIO_PLUGINS_DIR`, `RDK_ROJO_PORT`, `RDK_UVX`), doctor `--project`, `install.sh --no-mcp`, and extra test suites (`setup-blender`, `install-toolchain`, `validate`).
+- `claude plugin validate .` validates only the marketplace manifest when both manifests exist, so CI-style checks also run `claude plugin validate .claude-plugin/plugin.json --strict`, `skills` and `commands`.

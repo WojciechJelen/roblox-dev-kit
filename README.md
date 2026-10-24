@@ -38,6 +38,11 @@ Blender MCP server (it shows up as `plugin_roblox_blender`). It does **not** bun
 server: Studio's own Quick connect registers it as `Roblox_Studio`, and a second copy would show
 every Studio tool twice. If it is missing, the setup skill adds it.
 
+The Blender server is fetched by `uvx` on first start, which takes about 45 s (a ~200 MB download),
+longer than MCP clients wait. Run the setup skill's Blender step (or
+`uvx --from "git+https://projects.blender.org/lab/blender_mcp.git@v1.0.3#subdirectory=mcp" blender-mcp --help`)
+once before the first session; `setup-blender.sh` and `mcp-config.sh` do this for you.
+
 ### Codex CLI, pi, Oh My Pi
 
 ```sh
@@ -46,7 +51,9 @@ install/install.sh --harness codex     # or pi, omp, all
 
 This symlinks each skill into `~/.agents/skills/` (all three harnesses read it) and registers the
 MCP servers with that harness's own CLI (`codex mcp add`, `pi mcp add`) or, for Oh My Pi, in
-`~/.omp/agent/mcp.json`. Options: `--project DIR` installs into `DIR/.agents/skills/` instead,
+`~/.omp/agent/mcp.json`. Oh My Pi imports project-level `.mcp.json` / `.codex/config.toml` by
+default but the Claude Code and Codex *user* configs only when its `enabledProviders` setting lists
+them; servers it already imports are not added again. Options: `--project DIR` installs into `DIR/.agents/skills/` instead,
 `--copy` copies instead of linking, `--no-mcp` skips MCP registration, `--dry-run` shows what would
 happen. `install/uninstall.sh` removes only what this repo installed.
 
