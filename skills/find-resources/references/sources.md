@@ -57,11 +57,16 @@ must be PNG); no custom font upload (fonts come from the Creator Store's font ca
 | Mixamo, https://www.mixamo.com | browse (Adobe account) | royalty-free for commercial games; raw files may not be redistributed | Rigs are not Roblox R15; retargeting through Blender is real work, so prefer Roblox's animation packs | browse |
 | Fab / Megascans, https://www.fab.com | browse | Fab Standard License (not Creative Commons; read it). The 2024 free-for-all ended; a free "starter" selection of about 1,500 Megascans stays usable in any engine. Legacy Quixel assets from the old "free for Unreal Engine" terms may not be used in Roblox | Dense photoscans | browse |
 
-Sketchfab details: license slugs `cc0`, `by`, `by-sa`, `by-nd`, `by-nc`, `by-nc-sa`, `by-nc-nd`
-(a license uid in that parameter is rejected; a repeated `license=` keeps only the last, so
-`search.sh` sends one request per license). `max_face_count` works. Results give `uid`, `name`,
-`viewerUrl`, `license.label`, `faceCount`, `user.username`, and `archives` (`glb`, `gltf`,
-`source`, `usdz`) with `faceCount` and `textureMaxResolution`.
+Sketchfab details: license slugs `cc0`, `by`, `by-sa`, `by-nd`, `by-nc`, `by-nc-sa`, `by-nc-nd`,
+plus Sketchfab's store licenses `free-st` (Free Standard), `st` (Standard) and `ed` (Editorial)
+(all from `GET https://api.sketchfab.com/v3/licenses`). The store licenses are not Creative
+Commons; `search.sh --license any` shows them as "other: Free Standard" and the like, with a
+warning to read the terms. A license uid in that parameter is rejected; a repeated `license=` keeps
+only the last, so `search.sh` sends one request per license. `max_face_count` works. Results give
+`uid`, `name`, `viewerUrl`, `license.label`, `faceCount`, `user.username`, and `archives` (`glb`,
+`gltf`, `source`, `usdz`) with `faceCount` and `textureMaxResolution`. `viewerUrl` uses the slug
+`none-<uid>` for titles without Latin letters, so `search.sh` links
+`https://sketchfab.com/3d-models/<uid>`, which redirects (301) to the titled page.
 
 OpenGameArt ids: type 2D Art 9, 3D Art 10, Textures 14, Music 12, Sound Effects 13, Concept Art 7273,
 Documents 11; license CC0 4, CC-BY 3.0 2, CC-BY 4.0 17981, CC-BY-SA 3.0 3, CC-BY-SA 4.0 17982,
@@ -115,8 +120,9 @@ by one person, "potentially not as reliable or stable" as an enterprise service)
   (`attribute` such as `1K-JPG`, `fileName`, `size`, `downloadLink`). `?id=<assetId>` returns one.
 - `type` values that filter (case-insensitive, comma-separated): `Material`, `Decal`, `Atlas`,
   `HDRI`, `HDRI-Element`, `Substance`, `Terrain`, `Brush`, and **`3D-Model`** for the `3DModel`
-  data type. `3DModel`, `PlainTexture` and unknown values are silently ignored (all assets come
-  back). Data types seen: Material 2037, HDRI 434, Substance 211, Decal 127, Atlas 61, 3DModel 34,
+  data type. The API docs (https://docs.ambientcg.com/api/v2/full_json/) list `3DModel` as a
+  valid type, but only `type=3D-Model` filters live today. `3DModel`, `PlainTexture` and unknown
+  values are silently ignored (all assets come back). Data types seen: Material 2037, HDRI 434, Substance 211, Decal 127, Atlas 61, 3DModel 34,
   PlainTexture 9, Terrain 5, Brush 5, HDRIElement 4.
 - `downloadLink` (`https://ambientcg.com/get?file=<file>`) redirects to a CDN. A material's
   `1K-JPG` zip holds `<id>_1K-JPG_Color.jpg`, `_NormalGL.jpg`, `_NormalDX.jpg`, `_Roughness.jpg`,

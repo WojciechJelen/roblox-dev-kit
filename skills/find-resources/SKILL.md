@@ -51,7 +51,9 @@ licenses: use only what a search returned, and say when a search found nothing.
 
 ## 2. Roblox first
 
-Creator Store assets are already in Roblox's formats and need no upload.
+Creator Store assets are already in Roblox's formats and need no upload. Every Studio MCP tool
+call (`search_asset`, `insert_asset`, `script_grep`, `script_read`, ...) takes a `studio_id`: get it
+from `list_roblox_studios` first, and ask the user which Studio to use when several are open.
 
 - **With Studio connected** (the Studio MCP tools are available), use `search_asset` with
   `scope: "creator_store"`, `priceFilter: "free"`, `verifiedCreatorsOnly: true`, the matching
