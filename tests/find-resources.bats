@@ -553,6 +553,18 @@ z.writestr("what?/Bricks100_1K-JPG_Roughness.jpg", "fake Roughness")'
   [ "$(grep -cxF '| Swords \| Shields | Lorc | CC-BY 3.0 | https://game-icons.net/1x1/lorc/sword.html |' CREDITS.md)" -eq 1 ]
 }
 
+@test "credit: a new row joins the table even when text follows it" {
+  bash "$CREDIT" --name Tree --source https://kenney.nl/assets/nature-kit --license CC0 --author Kenney
+  printf '\nAll other art is our own.\n' >>CREDITS.md
+  run bash "$CREDIT" --name 'Rock | Big' --source https://polyhaven.com/a/rock_01 --license CC0 --author 'Rob \| T'
+  [ "$status" -eq 0 ]
+  [ "$(tail -n 4 CREDITS.md)" = "$(printf '%s\n' '| Tree | Kenney | CC0 | https://kenney.nl/assets/nature-kit |' \
+    '| Rock \| Big | Rob \\| T | CC0 | https://polyhaven.com/a/rock_01 |' '' 'All other art is our own.')" ]
+  run bash "$CREDIT" --name 'Rock | Big' --source https://polyhaven.com/a/rock_01 --license CC0
+  [[ "$output" == *"already credited"* ]]
+  [ "$(grep -c 'Rock' CREDITS.md)" -eq 1 ]
+}
+
 @test "credit: control characters are dropped from every cell" {
   run bash "$CREDIT" --name "$(printf 'Red \033[31mtree\033[0m\a')" --author "$(printf 'A\033[2Jnn')" --source https://a.example/x --license CC0
   [ "$status" -eq 0 ]

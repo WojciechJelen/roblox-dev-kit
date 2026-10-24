@@ -97,16 +97,33 @@ if [ -s "$file" ]; then
   # A file that does not end in a newline would glue the new row onto its last line.
   [ -z "$(tail -c 1 "$file")" ] || needs_newline=1
 fi
-{
-  [ $needs_newline = 0 ] || printf '\n'
-  if [ $new = 1 ]; then
-    printf '# Credits\n\n'
-    printf 'Third-party assets used in this game. Keep one row per asset, and show the same list on the\n'
-    printf "game's credits screen. The find-resources skill's credit.sh adds rows.\n\n"
-  elif [ $has_header = 0 ]; then
-    printf '\n'
+if [ $has_header = 1 ]; then
+  # Insert after the table's last row, so a row never lands below text that follows the table.
+  # (ENVIRON keeps the row's escaped pipes; awk -v would rewrite them.)
+  next_file=$(mktemp "${TMPDIR:-/tmp}/credit.XXXXXX") || rdk_die "cannot create a temporary file"
+  if ! CREDIT_HEADER=$HEADER_ROW CREDIT_ROW=$row awk '
+    BEGIN { header = ENVIRON["CREDIT_HEADER"]; row = ENVIRON["CREDIT_ROW"] }
+    { line[NR] = $0 }
+    $0 == header { in_table = 1; last = NR; next }
+    in_table && /^\|/ { last = NR; next }
+    { in_table = 0 }
+    END { for (i = 1; i <= NR; i++) { print line[i]; if (i == last) print row } }
+  ' "$file" >"$next_file" || ! cat "$next_file" >"$file"; then
+    rm -f "$next_file"
+    rdk_die "cannot write $file"
   fi
-  [ $has_header = 1 ] || printf '%s\n|---|---|---|---|\n' "$HEADER_ROW"
-  printf '%s\n' "$row"
-} >>"$file" || rdk_die "cannot write $file"
+  rm -f "$next_file"
+else
+  {
+    [ $needs_newline = 0 ] || printf '\n'
+    if [ $new = 1 ]; then
+      printf '# Credits\n\n'
+      printf 'Third-party assets used in this game. Keep one row per asset, and show the same list on the\n'
+      printf "game's credits screen. The find-resources skill's credit.sh adds rows.\n\n"
+    else
+      printf '\n'
+    fi
+    printf '%s\n|---|---|---|---|\n%s\n' "$HEADER_ROW" "$row"
+  } >>"$file" || rdk_die "cannot write $file"
+fi
 rdk_info "credited $name in $file"
