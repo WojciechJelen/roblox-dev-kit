@@ -82,8 +82,14 @@ favourites.
 OpenGL format - Tangent Space normal maps", https://create.roblox.com/docs/art/modeling/surface-appearance).
 So `fetch.sh` downloads Poly Haven's `nor_gl` and ambientCG's `_NormalGL` map, never the DirectX
 (`nor_dx`, `_NormalDX`) one. SurfaceAppearance takes ColorMap, NormalMap, RoughnessMap and
-MetalnessMap as separate grayscale/colour images; packed maps such as Poly Haven's `arm`
-(AO/roughness/metal in one image) do not fit and are skipped, as are AO and displacement.
+MetalnessMap as separate grayscale/colour images, so packed maps do not fit as they are. Poly
+Haven's `arm` packs AO (red), roughness (green) and metalness (blue); many metal sets have no
+separate `Metal` map (on 2026-10-24, 5 of the first 8 metal sets: blue_metal_plate,
+container_side, corrugated_iron_03, factory_wall, green_metal_rust), so for any set without
+`Metal`, `fetch.sh` downloads `arm`, records it in `SOURCE.json` as
+`ARM (ambient occlusion R, roughness G, metalness B)`, and prints how to split the blue channel
+(`magick in.jpg -channel B -separate out.png`, or Blender's Separate Color node). AO and
+displacement are not used.
 
 Poly Haven API (`https://api.polyhaven.com`, Swagger at `/api-docs/swagger.json`):
 - `GET /assets?t=textures|models|hdris|all` returns an object keyed by asset id with `name`, `type`

@@ -350,20 +350,49 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [ "$(jq -r '.license, .name, .page, .resolution, (.authors | join(","))' "$d/SOURCE.json" | tr '\n' ' ')" = \
     "CC0 Brick 4 https://polyhaven.com/a/brick_4 1k Rob Tuytel " ]
   [ "$(jq -r '[.files[] | .use] | join(",")' "$d/SOURCE.json")" = \
-    "SurfaceAppearance.ColorMap,SurfaceAppearance.NormalMap,SurfaceAppearance.RoughnessMap" ]
+    "SurfaceAppearance.ColorMap,SurfaceAppearance.NormalMap,SurfaceAppearance.RoughnessMap,ARM (ambient occlusion R, roughness G, metalness B): its blue channel is the MetalnessMap" ]
+  [ -f "$d/brick_4_arm_1k.jpg" ] # no Metal map, so the packed one comes along
+  [[ "$output" == *"Poly Haven does not list this set as metal, so leave MetalnessMap empty"* ]]
   grep -qxF '| Brick 4 | Rob Tuytel | CC0 | https://polyhaven.com/a/brick_4 |' "$FAKE/home/CREDITS.md"
-  [ "$(url_calls dl.polyhaven.org)" -eq 3 ]
+  [ "$(url_calls dl.polyhaven.org)" -eq 4 ]
   [[ "$output" == *"brick_4_diff_1k.jpg  ->  SurfaceAppearance.ColorMap"* ]]
   run bash "$FETCH" polyhaven:brick_4
   [ "$status" -eq 0 ]
   [[ "$output" == *"already in"* ]]
-  [ "$(url_calls dl.polyhaven.org)" -eq 3 ]
+  [ "$(url_calls dl.polyhaven.org)" -eq 4 ]
   [ "$(grep -c 'Brick 4' "$FAKE/home/CREDITS.md")" -eq 1 ]
   run --separate-stderr bash "$FETCH" polyhaven:brick_4 --res 2k --out "$FAKE/game/assets" --credits "$FAKE/game/CREDITS.md" --json
   [ "$status" -eq 0 ]
   [ "$(jq -r .dir <<<"$output")" = "$FAKE/game/assets/polyhaven/brick_4" ]
   [ -f "$FAKE/game/assets/polyhaven/brick_4/brick_4_diff_2k.jpg" ]
   [ -f "$FAKE/game/CREDITS.md" ]
+}
+
+@test "fetch: a metal set without a Metal map brings its arm map and says how to split it" {
+  polyhaven_routes
+  jq '.categories += ["metal"]' "$FAKE/routes/polyhaven-info-brick_4.json" >"$FAKE/routes/x" && mv "$FAKE/routes/x" "$FAKE/routes/polyhaven-info-brick_4.json"
+  run bash "$FETCH" polyhaven:brick_4 --out "$FAKE/home/assets"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.metal, (.files[] | select(.map == "arm") | .file)' "$FAKE/home/assets/polyhaven/brick_4/SOURCE.json" | tr '\n' ' ')" = "true brick_4_arm_1k.jpg " ]
+  [[ "$output" == *"this metal set has no separate metal map; it is the blue channel of brick_4_arm_1k.jpg"* ]]
+  [[ "$output" == *"magick $FAKE/home/assets/polyhaven/brick_4/brick_4_arm_1k.jpg -channel B -separate $FAKE/home/assets/polyhaven/brick_4/brick_4_metal_1k.png"* ]]
+  [[ "$output" == *"Separate Color node"* ]]
+}
+
+@test "fetch: a set with a Metal map uses it and leaves the arm map out" {
+  polyhaven_routes
+  jq '.Metal = {"1k": {jpg: (.Rough["1k"].jpg | .url |= sub("rough"; "metal"))}}' "$FAKE/routes/polyhaven-files-brick_4.json" >"$FAKE/routes/x"
+  # The fake serves "fake <name>"; give the Metal entry that size and checksum.
+  printf 'fake brick_4_metal_1k.jpg' >"$BATS_TEST_TMPDIR/metal"
+  jq --arg m "$(rdk_md5_of "$BATS_TEST_TMPDIR/metal")" --argjson n "$(wc -c <"$BATS_TEST_TMPDIR/metal" | tr -d ' ')" \
+    '.Metal["1k"].jpg.md5 = $m | .Metal["1k"].jpg.size = $n' "$FAKE/routes/x" >"$FAKE/routes/polyhaven-files-brick_4.json"
+  run bash "$FETCH" polyhaven:brick_4
+  [ "$status" -eq 0 ]
+  d="$FAKE/home/assets/third-party/polyhaven/brick_4"
+  [ -f "$d/brick_4_metal_1k.jpg" ]
+  [ ! -e "$d/brick_4_arm_1k.jpg" ]
+  [ "$(jq -r '.files[] | select(.map == "Metal") | .use' "$d/SOURCE.json")" = SurfaceAppearance.MetalnessMap ]
+  [[ "$output" != *"blue channel"* ]]
 }
 
 @test "fetch: a checksum mismatch fails and leaves no files" {

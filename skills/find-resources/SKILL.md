@@ -144,7 +144,10 @@ requests, hidden purchase prompts. Patterns, false positives and the checklist:
 - **Texture sets**: `"$SKILL_DIR/scripts/fetch.sh" polyhaven:<id>` or `ambientcg:<id>` (1k by
   default) puts the color, OpenGL normal, roughness and metalness maps in
   `assets/third-party/<source>/<id>/` with `SOURCE.json`. Roblox only reads OpenGL-style normal
-  maps, which is why those are fetched. Upload each map (Asphalt, or
+  maps, which is why those are fetched. Many Poly Haven metal sets keep metalness only in the
+  packed `arm` map (blue channel); `fetch.sh` then downloads that map and prints how to split the
+  channel (ImageMagick `magick <arm> -channel B -separate <metal>.png`, or Blender's Separate Color
+  node). Do it for metal sets before uploading. Upload each map (Asphalt, or
   `"$SKILL_DIR/../blender-to-roblox/scripts/upload-asset.sh" FILE --name N --type Image`; in Oh My
   Pi `skill://blender-to-roblox/scripts/upload-asset.sh`), then
   set `ColorMap`, `NormalMap`, `RoughnessMap` and `MetalnessMap` on a `SurfaceAppearance` under

@@ -21,8 +21,10 @@ Downloads into OUT/SOURCE/ID/ (default OUT: assets/third-party), checks each fil
 SOURCE.json (source, id, name, authors, license, page, date, files) and adds a CREDITS.md row
 with credit.sh.
 
-  polyhaven:<id>   a Poly Haven texture: color (Diffuse), OpenGL normal (nor_gl), roughness, and
-                   metalness when the set has one, as JPG; MD5 checked
+  polyhaven:<id>   a Poly Haven texture: color (Diffuse), OpenGL normal (nor_gl), roughness and
+                   metalness (Metal) as JPG, MD5 checked. Sets without a Metal map get the packed
+                   arm map instead (AO red, roughness green, metalness blue) and a note on
+                   splitting its blue channel
   ambientcg:<id>   an ambientCG material, decal or atlas (the <res>-JPG zip; keeps Color, NormalGL,
                    Roughness, Metalness, Opacity) or 3D model (the LQ-<res>-JPG zip; also keeps
                    the .obj and .mtl)
@@ -190,13 +192,17 @@ else
           ;;
         *) rdk_die "Poly Haven did not say what kind of asset $id is" ;;
       esac
+      metal_set=$(jq -r '[(.categories // [])[] | strings | ascii_downcase] | index("metal") != null' "$tmp/api.json")
       api "https://api.polyhaven.com/files/$id"
-      for pair in Diffuse:ColorMap nor_gl:NormalMap Rough:RoughnessMap Metal:MetalnessMap; do
+      # Without a Metal map, metalness is only in the packed arm map (AO red, roughness green,
+      # metalness blue): fetch that instead, and say how to split it.
+      for pair in Diffuse:ColorMap nor_gl:NormalMap Rough:RoughnessMap Metal:MetalnessMap arm:ARM; do
         map=${pair%%:*} prop=${pair#*:}
+        [ "$map" != arm ] || [ -z "$(jq -r '.[] | select(.map == "Metal") | .file' "$tmp/files.json")" ] || continue
         entry=$(jq -c --arg m "$map" --arg r "$res" '.[$m][$r].jpg // empty' "$tmp/api.json")
         if [ -z "$entry" ]; then
           case $map in
-            Metal) ;; # most sets are not metallic and have no metal map
+            Metal | arm) ;; # most sets are not metallic
             Diffuse) rdk_die "Poly Haven has no $res color map for $id" ;;
             *) rdk_warn "Poly Haven has no $res $map map for $id; leaving $prop empty" ;;
           esac
@@ -207,7 +213,11 @@ else
         case $file in '' | -* | *[!A-Za-z0-9_.-]*) rdk_die "unexpected file name in $url" ;; esac
         rdk_info "downloading $file"
         download "$url" "$tmp/stage/$file" "$(jq -r '.size // empty' <<<"$entry")" "$(jq -r '.md5 // empty' <<<"$entry")"
-        add_file "$file" "$map" "SurfaceAppearance.$prop"
+        if [ "$map" = arm ]; then
+          add_file "$file" "$map" "ARM (ambient occlusion R, roughness G, metalness B): its blue channel is the MetalnessMap"
+        else
+          add_file "$file" "$map" "SurfaceAppearance.$prop"
+        fi
       done
       page="https://polyhaven.com/a/$id"
       kind=texture
@@ -286,9 +296,10 @@ else
   name=${name:-$id}
   jq -n --arg source "$src" --arg id "$id" --arg name "$name" --arg kind "$kind" --arg authors "$authors" \
     --arg page "$page" --arg res "$res" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg cc0 "$CC0_URL" \
-    --slurpfile files "$tmp/files.json" '
+    --argjson metal "${metal_set:-false}" --slurpfile files "$tmp/files.json" '
     {source: $source, id: $id, name: $name, type: $kind, authors: ($authors | split(", ")),
-     license: "CC0", licenseUrl: $cc0, page: $page, resolution: $res, downloaded: $date, files: $files[0]}' >"$tmp/source.json"
+     license: "CC0", licenseUrl: $cc0, page: $page, resolution: $res, downloaded: $date, metal: $metal,
+     files: $files[0]}' >"$tmp/source.json"
 
   for f in "$tmp/stage"/*; do
     [ ! -L "$f" ] || rdk_die "refusing $(basename "$f"): it is a link"
@@ -313,6 +324,18 @@ if [ "$json" = 1 ]; then
 else
   printf '%s "%s" (CC0) is in %s:\n' "$ref" "$name" "$dest"
   jq -r '.files[] | "  \(.file)  ->  \(.use)"' "$tmp/source.json"
+  arm=$(jq -r '.files[] | select(.map == "arm") | .file' "$tmp/source.json")
+  if [ -n "$arm" ]; then
+    if [ "$(jq -r '.metal // false' "$tmp/source.json")" = true ]; then
+      printf 'metalness: this metal set has no separate metal map; it is the blue channel of %s.\n' "$arm"
+      printf '  Split it for SurfaceAppearance.MetalnessMap with ImageMagick:\n'
+      printf '    magick %s -channel B -separate %s\n' "$(rdk_quote "$dest/$arm")" "$(rdk_quote "$dest/${id}_metal_$res.png")"
+      printf '  or in Blender with a Separate Color node (use the Blue output).\n'
+    else
+      printf 'metalness: Poly Haven does not list this set as metal, so leave MetalnessMap empty; the blue\n'
+      printf '  channel of %s holds metalness if you need it.\n' "$arm"
+    fi
+  fi
   printf '%s\n' "$credit_out"
   if [ "$res" = 2k ]; then
     printf 'note: Roblox uses PBR maps up to 1024x1024; scale 2k maps down before uploading.\n'
