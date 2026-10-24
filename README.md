@@ -29,6 +29,13 @@ can also be run by hand (each script has `--help`, most have `--dry-run`).
 
 ## Install
 
+Get the kit (the scripts below run from this clone):
+
+```sh
+git clone https://github.com/WojciechJelen/roblox-dev-kit.git
+cd roblox-dev-kit
+```
+
 ### Per project (recommended)
 
 Everything goes into the game's own folder, so each project carries its agent setup in its
@@ -43,7 +50,8 @@ install/install.sh --harness all --project path/to/game
   `.codex/config.toml`, `.pi/mcp.json` and `.omp/mcp.json` (Oh My Pi imports `.mcp.json` and
   `.codex/config.toml` itself, so it usually needs no file of its own).
 - Claude Code: the script prints the project-scope plugin commands to run from the game folder,
-  `claude plugin marketplace add /path/to/roblox-dev-kit --scope project` and
+  `claude plugin marketplace add /path/to/roblox-dev-kit --scope project` (or
+  `WojciechJelen/roblox-dev-kit` to fetch it from GitHub) and
   `claude plugin install roblox@roblox-dev-kit --scope project` (they write `.claude/settings.json`),
   and puts Roblox Studio's server in `.mcp.json`; the plugin brings the Blender server. `--no-plugin`
   links loose skills into `.claude/skills/` instead.
@@ -62,7 +70,7 @@ The sections below install at user scope instead.
 ### Claude Code (user scope)
 
 ```sh
-claude plugin marketplace add /path/to/roblox-dev-kit    # or the GitHub repository once published
+claude plugin marketplace add WojciechJelen/roblox-dev-kit    # or the path of a local clone
 claude plugin install roblox@roblox-dev-kit
 ```
 

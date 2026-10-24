@@ -7,5 +7,7 @@
     "name": "Wojciech Jelen"
   },
   "license": "MIT",
+  "homepage": "https://github.com/WojciechJelen/roblox-dev-kit",
+  "repository": "https://github.com/WojciechJelen/roblox-dev-kit",
   "keywords": ["roblox", "rojo", "luau", "rokit", "blender", "mcp", "roblox-studio"]
 }
