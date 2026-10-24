@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "roblox",
   "version": "0.1.0",
-  "description": "Roblox game development with AI agents: Rokit/Rojo toolchain, strict-Luau project template, adopting existing games into Rojo, Roblox Studio and Blender MCP setup, and an environment doctor.",
+  "description": "Roblox game development with AI agents: Rokit/Rojo toolchain, strict-Luau project template, adopting existing games into Rojo, Roblox Studio and Blender MCP setup, an environment doctor, and Blender-to-Roblox mesh checks, FBX export and Open Cloud uploads.",
   "author": {
     "name": "Wojciech Jelen"
   },

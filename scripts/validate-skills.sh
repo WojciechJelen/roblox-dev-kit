@@ -85,7 +85,7 @@ for skill_md in "$ROOT"/skills/*/SKILL.md; do
   while IFS= read -r script; do
     [ -n "$script" ] || continue
     ls "$ROOT"/skills/*/scripts/"$script" >/dev/null 2>&1 || fail "mentions $script, which no skill ships"
-  done <<<"$(grep -oE '[a-z][a-z0-9-]*\.sh' "$skill_md" | sort -u)"
+  done <<<"$(grep -oE '[a-z][a-z0-9_-]*\.sh' "$skill_md" | sort -u)"
 
   for script in "$dir"/scripts/*.sh; do
     [ -f "$script" ] || continue

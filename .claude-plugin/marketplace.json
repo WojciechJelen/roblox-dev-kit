@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "roblox-dev-kit",
-  "description": "Roblox game development kit for Claude Code: setup and doctor skills plus the Blender MCP server.",
+  "description": "Roblox game development kit for Claude Code: setup, doctor and Blender-to-Roblox skills plus the Blender MCP server.",
   "owner": {
     "name": "Wojciech Jelen"
   },
@@ -9,7 +9,7 @@
     {
       "name": "roblox",
       "source": "./",
-      "description": "Roblox game development with AI agents: Rokit/Rojo toolchain, strict-Luau project template, adopting existing games into Rojo, Roblox Studio and Blender MCP setup, and an environment doctor.",
+      "description": "Roblox game development with AI agents: Rokit/Rojo toolchain, strict-Luau project template, adopting existing games into Rojo, Roblox Studio and Blender MCP setup, an environment doctor, and Blender-to-Roblox mesh checks, FBX export and Open Cloud uploads.",
       "version": "0.1.0",
       "category": "development"
     }
