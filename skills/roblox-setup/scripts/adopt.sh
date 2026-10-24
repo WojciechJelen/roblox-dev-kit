@@ -129,6 +129,18 @@ while IFS= read -r line || [ -n "$line" ]; do
     continue
   fi
   case $dm in *//*) bad "empty name in DataModel path: $dm"; continue ;; esac
+  # Segments become directory names under src/, so none may step out of it.
+  seg_ok=1
+  for seg in "${segs[@]}"; do
+    case $seg in
+      '' | . | .. | *\\* | *[[:cntrl:]]*)
+        bad "invalid name '$seg' in DataModel path: $dm"
+        seg_ok=0
+        break
+        ;;
+    esac
+  done
+  [ $seg_ok = 1 ] || continue
   case "$SERVICES" in
     *" ${segs[0]} "*) ;;
     *) bad "unknown service '${segs[0]}' (expected one of:$SERVICES)"; continue ;;

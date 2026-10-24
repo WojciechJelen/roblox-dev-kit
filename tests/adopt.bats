@@ -153,3 +153,17 @@ project_json() { # the JSON block that adopt.sh prints after "default.project.js
   [[ "$output" == *"keep   src/ReplicatedStorage/RivalsFactory.lua"* ]]
   [ -f "$GAME/src/ReplicatedStorage/RivalsFactory.lua" ]
 }
+
+@test "DataModel paths cannot climb out of src/" {
+  printf '%s\n' \
+    'src/Factory.lua	ReplicatedStorage/../../../outside/X	ModuleScript' \
+    'src/FX.lua	ReplicatedStorage/./FX	ModuleScript' \
+    'src/Server.server.lua	ServerScriptService/a\b/Server	Script' >"$MAP"
+  before=$(cd "$FAKE" && find . | sort)
+  run bash "$ADOPT" "$GAME" --mapping "$MAP" --apply
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"line 1: invalid name '..'"* ]]
+  [[ "$output" == *"line 2: invalid name '.'"* ]]
+  [[ "$output" == *"line 3: invalid name 'a\\b'"* ]]
+  [ "$(cd "$FAKE" && find . | sort)" = "$before" ]
+}
