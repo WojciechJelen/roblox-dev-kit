@@ -27,13 +27,16 @@ setup_fake_machine() {
   unset CLAUDE_CONFIG_DIR CODEX_HOME BLENDER_PATH
   unset BLENDER_USER_RESOURCES BLENDER_USER_CONFIG BLENDER_USER_SCRIPTS BLENDER_USER_EXTENSIONS
   unset ROBLOX_API_KEY ROBLOX_CREATOR_TYPE ROBLOX_CREATOR_ID
-  unset RDK_NO_JQ RDK_NETWORK_TESTS RDK_BLENDER_BIN RDK_STUDIO_MCP_BIN RDK_STUDIO_PLUGINS_DIR RDK_ROKIT_BIN_DIR
+  unset RDK_NO_JQ RDK_NETWORK_TESTS RDK_BLENDER_BIN RDK_STUDIO_MCP_BIN RDK_STUDIO_PLUGINS_DIR RDK_ROKIT_BIN_DIR ROKIT_ROOT
   export NO_COLOR=1 RDK_OS=macos
   export RDK_STUDIO_APP="$FAKE/Applications/RobloxStudio.app"
   export RDK_BLENDER_APP="$FAKE/Applications/Blender.app"
   export RDK_LOCAL_BIN="$FAKE/home/.local/bin"
-  # Port 1 is never served on a developer machine, so the Blender port check is deterministic.
-  export RDK_BLENDER_MCP_PORT=1
+  # Only a fake uvx (fake_cmd uvx ...) may run; never the real one in /opt/homebrew/bin.
+  export RDK_UVX="$FAKE/bin/uvx"
+  # Port 1 is never served on a developer machine, so the port checks are deterministic
+  # even while the developer runs Blender or `rojo serve`.
+  export RDK_BLENDER_MCP_PORT=1 RDK_ROJO_PORT=1
 
   ln -s "$REAL_JQ" "$FAKE/bin/jq"
   [ -z "$REAL_GIT" ] || ln -s "$REAL_GIT" "$FAKE/bin/git"

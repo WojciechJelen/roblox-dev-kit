@@ -142,3 +142,48 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"unknown server: nope"* ]]
 }
+
+@test "after registering blender the server is fetched into uv's cache, once" {
+  fake_logging_cmd codex
+  fake_logging_cmd pi
+  fake_logging_cmd uvx
+  run bash "$MCP" --harness all
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^uvx ' "$FAKE/calls.log")" -eq 1 ]
+  grep -qx "uvx \[--from\] \[$SPEC\] \[blender-mcp\] \[--help\]" "$FAKE/calls.log"
+  [[ "$output" == *"Blender MCP server ready"* ]]
+}
+
+@test "--no-warm and --dry-run do not run uvx" {
+  fake_logging_cmd codex
+  fake_logging_cmd uvx
+  run bash "$MCP" --harness codex --no-warm
+  [ "$status" -eq 0 ]
+  run ! grep -q '^uvx' "$FAKE/calls.log"
+  rm -f "$FAKE/calls.log" "$HOME/.codex/config.toml"
+  run bash "$MCP" --harness codex --dry-run
+  [[ "$output" == *"would run: uvx --from '$SPEC' blender-mcp --help"* ]]
+  [ ! -e "$FAKE/calls.log" ]
+}
+
+@test "claude: a server in the project's .mcp.json is not added again at user scope" {
+  fake_logging_cmd claude
+  mkdir -p "$FAKE/proj"
+  cd "$FAKE/proj"
+  echo '{"mcpServers":{"blender":{"command":"bash","args":["/k/mcp/blender-mcp.sh"]}}}' >.mcp.json
+  run bash "$MCP" --harness claude --no-warm
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"blender already registered (./.mcp.json, project scope), skipping"* ]]
+  run ! grep -q 'blender' "$FAKE/calls.log"
+}
+
+@test "omp: servers it already imports via enabledProviders are skipped" {
+  fake_logging_cmd omp
+  mkdir -p "$HOME/.omp/agent"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$HOME/.claude.json"
+  printf 'enabledProviders: [claude]\n' >"$HOME/.omp/agent/config.yml"
+  run bash "$MCP" --harness omp --no-warm
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Roblox_Studio already registered (imported from Claude Code"* ]]
+  [ "$(jq -r '.mcpServers | keys | join(",")' "$HOME/.omp/agent/mcp.json")" = blender ]
+}

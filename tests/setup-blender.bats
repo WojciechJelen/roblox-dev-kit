@@ -16,6 +16,7 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"downloading https://projects.blender.org/lab/blender_mcp/releases/download/v1.0.3/mcp-1.0.3.zip"* ]]
   [[ "$output" == *"--background --python-exit-code 1 --python-expr"* ]]
+  [[ "$output" == *"blender-mcp --help   (prepares uv's cache)"* ]]
   [ ! -e "$FAKE/calls.log" ]
   [ ! -e "$FAKE/blender.log" ]
   [ ! -e "$RDK_LOCAL_BIN" ]
@@ -123,4 +124,26 @@ EOF
 a = bpy.context.preferences.addons.get("bl_ext.user_default.mcp")
 print("CHECK", a is not None and a.preferences.use_autostart, bpy.context.preferences.system.use_online_access)'
   [[ "$output" == *"CHECK True True"* ]]
+}
+
+@test "prepares the pinned server in uv's cache unless --no-warm" {
+  fake_blender
+  install_fake_addon 1.0.3
+  fake_logging_cmd uvx
+  run bash "$SETUP_BLENDER" --no-symlink
+  [ "$status" -eq 0 ]
+  grep -qx 'uvx \[--from\] \[git+https://projects.blender.org/lab/blender_mcp.git@v1.0.3#subdirectory=mcp\] \[blender-mcp\] \[--help\]' "$FAKE/calls.log"
+  rm "$FAKE/calls.log"
+  run bash "$SETUP_BLENDER" --no-symlink --no-warm
+  [ "$status" -eq 0 ]
+  [ ! -e "$FAKE/calls.log" ]
+}
+
+@test "a failed warm-up is a warning, not a failure" {
+  fake_blender
+  install_fake_addon 1.0.3
+  fake_cmd uvx 'echo "network unreachable" >&2; exit 2'
+  run bash "$SETUP_BLENDER" --no-symlink
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"could not prepare the Blender MCP server"* ]]
 }

@@ -155,7 +155,7 @@ green_machine() {
   scaffold_project "$FAKE/game"
   doctor_json --section toolchain --project "$FAKE/game"
   [ "$(status_of toolchain.tool.zap)" = fail ]
-  [ "$(printf '%s' "$output" | jq -r '.checks[] | select(.id == "toolchain.tool.zap") | .fix')" = "rokit install" ]
+  [[ "$(printf '%s' "$output" | jq -r '.checks[] | select(.id == "toolchain.tool.zap") | .fix')" == "rokit install "* ]]
 }
 
 @test "project: missing configs, missing packages and a stale sourcemap warn" {
@@ -297,4 +297,69 @@ green_machine() {
   doctor_json --section project --project "$FAKE/game" --fix
   [ "$(status_of project.sourcemap)" = warn ]
   [[ "$stderr" == *"rojo is not on PATH"* ]]
+}
+
+@test "project: a commented [dependencies] header still counts its packages" {
+  scaffold_project "$FAKE/game"
+  printf '[package]\nname = "local/g"\n\n[dependencies] # shared code\nCharm = "littensy/charm@0.11.1"\n' >"$FAKE/game/wally.toml"
+  doctor_json --section project --project "$FAKE/game"
+  [ "$(status_of project.packages)" = warn ]
+  [[ "$(detail_of project.packages)" == *"Packages/ is missing"* ]]
+}
+
+@test "project: rojo serve detection follows RDK_ROJO_PORT, not whatever runs on 34872" {
+  [ -n "$REAL_PYTHON" ] || skip "python3 needed for the listener"
+  scaffold_project "$FAKE/game"
+  doctor_json --section project --project "$FAKE/game"
+  [ "$(status_of project.rojo-serve)" = skip ]
+  listen_on_free_port
+  RDK_ROJO_PORT=$LISTEN_PORT doctor_json --section project --project "$FAKE/game"
+  kill "$LISTEN_PID"
+  [ "$(status_of project.rojo-serve)" = ok ]
+}
+
+@test "mcp: Oh My Pi servers imported from Claude Code, Codex or project files pass with their source" {
+  fake_logging_cmd omp
+  mkdir -p "$HOME/.omp/agent" "$HOME/.codex" "$FAKE/proj"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$HOME/.claude.json"
+  printf '[mcp_servers.blender]\ncommand = "uvx"\n' >"$HOME/.codex/config.toml"
+  cd "$FAKE/proj"
+  doctor_json --section mcp
+  [ "$(status_of mcp.omp.studio)" = fail ]
+  printf 'enabledProviders:\n  - claude\n  - codex\n' >"$HOME/.omp/agent/config.yml"
+  doctor_json --section mcp
+  [ "$status" -eq 0 ]
+  [ "$(detail_of mcp.omp.studio)" = "Roblox_Studio registered (imported from Claude Code (~/.claude.json; enabledProviders))" ]
+  [[ "$(detail_of mcp.omp.blender)" == *"imported from Codex"* ]]
+  rm "$HOME/.omp/agent/config.yml"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"},"blender":{"command":"uvx"}}}' >.mcp.json
+  doctor_json --section mcp
+  [[ "$(detail_of mcp.omp.studio)" == *"project file ./.mcp.json (imported by default)"* ]]
+}
+
+@test "mcp: Claude Code project .mcp.json counts, and a second Blender there is a duplicate" {
+  fake_logging_cmd claude
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"},"blender":{"command":"/x/uvx","args":["--from","git+https://projects.blender.org/lab/blender_mcp.git@v1.0.3#subdirectory=mcp","blender-mcp"]}}}' >"$HOME/.claude.json"
+  mkdir -p "$FAKE/proj"
+  cd "$FAKE/proj"
+  echo '{"mcpServers":{"blender-local":{"command":"bash","args":["/k/mcp/blender-mcp.sh"]}}}' >.mcp.json
+  doctor_json --section mcp
+  [ "$(status_of mcp.claude.duplicates)" = warn ]
+  [[ "$(detail_of mcp.claude.duplicates)" == *"blender blender-local"* ]]
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$HOME/.claude.json"
+  echo '{"mcpServers":{"blender":{"command":"bash","args":["/k/mcp/blender-mcp.sh"]}}}' >.mcp.json
+  doctor_json --section mcp
+  [ "$(detail_of mcp.claude.blender)" = "blender registered (./.mcp.json, project scope)" ]
+}
+
+@test "--fix runs a plain rokit install (never --no-trust-check) and points at --trust" {
+  fake_tool rokit "rokit 1.2.0"
+  printf '#!/bin/sh\n[ "$1" = --version ] && { echo "rokit 1.2.0"; exit 0; }\necho "rokit $*" >>"%s"\nexit 1\n' "$FAKE/calls.log" >"$FAKE/home/.rokit/bin/rokit"
+  export PATH="$FAKE/home/.rokit/bin:$PATH"
+  scaffold_project "$FAKE/game"
+  doctor_json --section toolchain --project "$FAKE/game"
+  [[ "$(printf '%s' "$output" | jq -r '.checks[] | select(.id == "toolchain.tool.rojo") | .fix')" == *"install-toolchain.sh --trust"* ]]
+  doctor_json --section toolchain --project "$FAKE/game" --fix
+  [ "$(cat "$FAKE/calls.log")" = "rokit install" ]
+  [[ "$stderr" == *"run roblox-setup scripts/install-toolchain.sh --trust"* ]]
 }

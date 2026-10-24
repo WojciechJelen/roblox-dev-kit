@@ -50,6 +50,9 @@ jobs:
       - name: Scaffold and install the toolchain
         run: |
           skills/roblox-setup/scripts/scaffold.sh "$RUNNER_TEMP/game" "CI Game" --no-git
+          skills/roblox-setup/scripts/install-toolchain.sh --rokit-only
+          # GITHUB_PAT only covers the installer; authenticate so the tool downloads are not anonymous.
+          "$HOME/.rokit/bin/rokit" authenticate github --token "${{ secrets.GITHUB_TOKEN }}" --skip-verify
           skills/roblox-setup/scripts/install-toolchain.sh --project "$RUNNER_TEMP/game" --trust
           echo "$HOME/.rokit/bin" >> "$GITHUB_PATH"
 

@@ -8,7 +8,8 @@ metadata:
 
 # Roblox doctor
 
-`SKILL_DIR` is the directory that contains this SKILL.md (in Oh My Pi: `skill://roblox-doctor`).
+`SKILL_DIR` is the directory that contains this SKILL.md (Oh My Pi shows it as
+`[Skill directory: <path>]`; `skill://roblox-doctor` resolves to it in bash).
 
 ## Run it
 
@@ -41,6 +42,9 @@ table back unless asked. Group fixes by who does them:
 
 Points that are easy to get wrong:
 - `mcp.<harness>.studio` failing for a harness the user does not use is noise; say so and move on.
+- For Oh My Pi a server counts as registered when OMP would import it: from `./.mcp.json` or
+  `./.codex/config.toml` by default, and from the Claude Code / Codex user configs only when its
+  `enabledProviders` setting lists them. The detail says which source was used.
 - `blender.port` is a warning because it only passes while Blender is open with the add-on running.
 - `mcp.<harness>.duplicates` means the same app is registered twice (for example the `roblox`
   plugin's Blender server plus a manual `blender` entry); every tool then appears twice.

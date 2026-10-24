@@ -13,13 +13,14 @@ TEMPLATE_MANIFEST="$SCRIPT_DIR/../assets/template/rokit.toml"
 
 usage() {
   cat <<EOF
-usage: install-toolchain.sh [--project DIR | --global] [--trust] [--dry-run]
+usage: install-toolchain.sh [--project DIR | --global | --rokit-only] [--trust] [--dry-run]
 
 Installs Rokit $ROKIT_VERSION when it is missing, then the tools:
   --project DIR  run 'rokit install' for DIR/rokit.toml (default: current directory if it has one)
   --global       add the kit's pinned tool set to Rokit's global manifest (when there is no project)
-  --trust        trust the pinned tools without Rokit's interactive prompt
-                 (required when not running in a terminal, e.g. from an agent)
+  --rokit-only   install Rokit and stop (e.g. to run 'rokit authenticate' before the downloads)
+  --trust        record trust for the pinned tools with 'rokit trust' instead of Rokit's
+                 interactive prompt (required when not running in a terminal, e.g. from an agent)
   --dry-run      print what would happen
 EOF
 }
@@ -33,6 +34,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --global) mode=global ;;
+    --rokit-only) mode="rokit-only" ;;
     --trust) trust=1 ;;
     --dry-run) dry_run=1 ;;
     -h | --help)
@@ -54,7 +56,14 @@ fi
 if [ "$mode" = project ]; then
   [ -f "$project_dir/rokit.toml" ] || rdk_die "no rokit.toml in $project_dir"
   project_dir=$(cd "$project_dir" && pwd -P)
+  manifest="$project_dir/rokit.toml"
+else
+  manifest=$TEMPLATE_MANIFEST
+  [ -f "$manifest" ] || rdk_die "missing $manifest"
 fi
+
+# Every rokit call below (the installer, trust, install, add) must use the same store.
+export ROKIT_ROOT="${RDK_ROKIT_BIN_DIR%/bin}"
 
 run() {
   rdk_info "+ $(rdk_quote "$@")"
@@ -63,7 +72,6 @@ run() {
 
 # --- 1. Rokit itself ---------------------------------------------------------------
 
-rokit_root=${RDK_ROKIT_BIN_DIR%/bin}
 rokit=$(command -v rokit 2>/dev/null || true)
 if [ -z "$rokit" ] && [ -x "$RDK_ROKIT_BIN_DIR/rokit" ]; then rokit="$RDK_ROKIT_BIN_DIR/rokit"; fi
 
@@ -71,7 +79,7 @@ if [ -n "$rokit" ]; then
   rdk_info "rokit: $("$rokit" --version 2>/dev/null || echo present) ($(rdk_tilde "$rokit"))"
 else
   for dep in curl unzip; do rdk_has "$dep" || rdk_die "$dep is required to install Rokit"; done
-  rdk_info "installing Rokit $ROKIT_VERSION into $(rdk_tilde "$rokit_root")"
+  rdk_info "installing Rokit $ROKIT_VERSION into $(rdk_tilde "$ROKIT_ROOT")"
   if [ $dry_run = 1 ]; then
     rdk_info "+ curl -fsSL $ROKIT_INSTALLER_URL | bash -s -- $ROKIT_VERSION   (with a throwaway HOME, see below)"
   else
@@ -82,43 +90,43 @@ else
     # `rokit self-install` (run by the official installer) appends to ~/.profile, ~/.bashrc and
     # ~/.zshenv and has no opt-out. ROKIT_ROOT keeps the real install location while HOME points
     # at a throwaway directory, so those appends land there instead of in the user's files.
-    (cd "$tmp/work" && HOME="$tmp/profile" ROKIT_ROOT="$rokit_root" bash "$tmp/install.sh" "$ROKIT_VERSION")
+    (cd "$tmp/work" && HOME="$tmp/profile" bash "$tmp/install.sh" "$ROKIT_VERSION")
   fi
   rokit="$RDK_ROKIT_BIN_DIR/rokit"
 fi
 
 # --- 2. Tools ----------------------------------------------------------------------
 
-# Rokit asks before trusting each new tool and bails when stderr is not a terminal.
-if [ $trust = 0 ] && [ ! -t 2 ] && [ $dry_run = 0 ]; then
-  rdk_die "Rokit confirms each new tool interactively and this is not a terminal. Re-run in a terminal, or pass --trust to trust the tools pinned in rokit.toml."
-fi
-
-if [ "$mode" = project ]; then
-  rdk_info "installing the tools pinned in $(rdk_tilde "$project_dir")/rokit.toml"
-  if [ $trust = 1 ]; then
-    (cd "$project_dir" && run "$rokit" install --no-trust-check)
-  else
-    (cd "$project_dir" && run "$rokit" install)
+if [ "$mode" != rokit-only ]; then
+  # Rokit asks before trusting each new tool and bails when stderr is not a terminal.
+  if [ $trust = 0 ] && [ ! -t 2 ] && [ $dry_run = 0 ]; then
+    rdk_die "Rokit confirms each new tool interactively and this is not a terminal. Re-run in a terminal, or pass --trust to trust the tools pinned in rokit.toml."
   fi
-else
-  [ -f "$TEMPLATE_MANIFEST" ] || rdk_die "missing $TEMPLATE_MANIFEST"
-  rdk_info "adding the kit's pinned tools to Rokit's global manifest"
-  while IFS='=' read -r alias spec; do
-    alias=$(printf '%s' "$alias" | tr -d ' "')
-    spec=$(printf '%s' "${spec%%#*}" | tr -d ' "')
-    [ -n "$alias" ] && [ -n "$spec" ] || continue
-    if [ -e "$RDK_ROKIT_BIN_DIR/$alias" ]; then
-      rdk_info "$alias: already linked in $(rdk_tilde "$RDK_ROKIT_BIN_DIR"), skipping"
-      continue
-    fi
-    # --force is rokit's only way to skip the trust prompt for `add`.
-    if [ $trust = 1 ]; then
-      run "$rokit" add --global --force "$spec" "$alias"
-    else
+
+  tools=$(rdk_rokit_tools "$manifest")
+  [ -n "$tools" ] || rdk_die "no tools in $manifest"
+
+  # `rokit install --no-trust-check` would install without recording trust, so every later plain
+  # `rokit install` (after a version bump, or the doctor's --fix) would prompt again.
+  if [ $trust = 1 ]; then
+    ids=()
+    while IFS=$'\t' read -r alias spec; do ids+=("${spec%@*}"); done <<<"$tools"
+    run "$rokit" trust "${ids[@]}"
+  fi
+
+  if [ "$mode" = project ]; then
+    rdk_info "installing the tools pinned in $(rdk_tilde "$manifest")"
+    (cd "$project_dir" && run "$rokit" install)
+  else
+    rdk_info "adding the kit's pinned tools to Rokit's global manifest"
+    while IFS=$'\t' read -r alias spec; do
+      if [ -e "$RDK_ROKIT_BIN_DIR/$alias" ]; then
+        rdk_info "$alias: already linked in $(rdk_tilde "$RDK_ROKIT_BIN_DIR"), skipping"
+        continue
+      fi
       run "$rokit" add --global "$spec" "$alias"
-    fi
-  done < <(awk '/^\[/ { t = ($0 ~ /^\[tools\]/); next } t && /=/' "$TEMPLATE_MANIFEST")
+    done <<<"$tools"
+  fi
 fi
 
 # --- 3. PATH -----------------------------------------------------------------------

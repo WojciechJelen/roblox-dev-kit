@@ -2,7 +2,7 @@
 # Shared shell helpers for roblox-dev-kit. Source this file; do not execute it.
 # Works on macOS bash 3.2 and bash 5. Every machine-specific path can be
 # overridden with an RDK_* variable so tests can fake the whole machine.
-# shellcheck disable=SC2034  # constants and colours are used by the scripts that source this
+# shellcheck disable=SC2034,SC2016  # constants are used by the sourcing scripts; jq filters use $names literally
 set -euo pipefail
 
 # --- constants ---------------------------------------------------------------
@@ -14,18 +14,18 @@ RDK_BLENDER_SERVER="blender"
 RDK_BLENDER_MCP_VERSION="1.0.3"
 RDK_BLENDER_MIN_VERSION="5.1"
 RDK_BLENDER_MCP_SPEC="git+https://projects.blender.org/lab/blender_mcp.git@v${RDK_BLENDER_MCP_VERSION}#subdirectory=mcp"
-RDK_ROJO_PORT="34872"
 RDK_HARNESSES="claude codex pi omp"
 RDK_STANDARD_TOOLS="rojo wally lune stylua selene luau-lsp zap asphalt"
 
 # --- overridable paths ---------------------------------------------------------
 
 RDK_HOME="${RDK_HOME:-$HOME}"
-RDK_ROKIT_BIN_DIR="${RDK_ROKIT_BIN_DIR:-$RDK_HOME/.rokit/bin}"
+RDK_ROKIT_BIN_DIR="${RDK_ROKIT_BIN_DIR:-${ROKIT_ROOT:-$RDK_HOME/.rokit}/bin}"
 RDK_LOCAL_BIN="${RDK_LOCAL_BIN:-$RDK_HOME/.local/bin}"
 RDK_BLENDER_APP="${RDK_BLENDER_APP:-/Applications/Blender.app}"
 RDK_STUDIO_APP="${RDK_STUDIO_APP:-/Applications/RobloxStudio.app}"
 RDK_BLENDER_MCP_PORT="${RDK_BLENDER_MCP_PORT:-9876}"
+RDK_ROJO_PORT="${RDK_ROJO_PORT:-34872}"
 
 # --- logging -----------------------------------------------------------------
 
@@ -94,7 +94,6 @@ rdk_path_line() {
   case $d in
     "$RDK_HOME"/*) d="\$HOME${d#"$RDK_HOME"}" ;;
   esac
-  # shellcheck disable=SC2016  # $PATH is meant literally
   printf 'export PATH="%s:$PATH"\n' "$d"
 }
 
@@ -172,6 +171,22 @@ rdk_check_project_name() {
 # rdk_package_name NAME: lowercase kebab-case, as Wally package names require.
 rdk_package_name() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | tr -s '-' | sed 's/^-//; s/-$//'
+}
+
+# rdk_rokit_tools FILE: "alias<TAB>owner/repo@version" for each entry of rokit.toml's [tools].
+# Table headers are compared without trailing comments ("[tools] # pinned" still counts).
+rdk_rokit_tools() {
+  awk '
+    /^[[:space:]]*\[/ { h = $0; sub(/#.*/, "", h); gsub(/[[:space:]]/, "", h); in_tools = (h == "[tools]"); next }
+    in_tools {
+      line = $0
+      sub(/#.*/, "", line)
+      if (line !~ /=/) next
+      alias = line; sub(/=.*/, "", alias); gsub(/[[:space:]"]/, "", alias)
+      spec = line; sub(/^[^=]*=/, "", spec); gsub(/[[:space:]"]/, "", spec)
+      if (alias != "" && spec != "") print alias "\t" spec
+    }
+  ' "$1"
 }
 
 # --- Blender -----------------------------------------------------------------
@@ -281,6 +296,47 @@ rdk_blender_community_addon() {
   return 1
 }
 
+# rdk_find_uvx: RDK_UVX if set (and only that), else uvx on PATH, else the usual install
+# locations (GUI-started harnesses often have a minimal PATH).
+rdk_find_uvx() {
+  local p
+  if [ -n "${RDK_UVX:-}" ]; then
+    [ -x "$RDK_UVX" ] || return 1
+    printf '%s\n' "$RDK_UVX"
+    return 0
+  fi
+  if p=$(command -v uvx 2>/dev/null); then
+    printf '%s\n' "$p"
+    return 0
+  fi
+  for p in /opt/homebrew/bin/uvx /usr/local/bin/uvx "$RDK_HOME/.local/bin/uvx" "$RDK_HOME/.cargo/bin/uvx"; do
+    if [ -x "$p" ]; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# rdk_warm_blender_server: fetch and build the pinned Blender MCP server into uv's cache.
+# A cold `uvx --from git+...` start clones ~200 MB and takes ~45 s, longer than MCP clients
+# wait for a server to start; once cached it starts in ~4 s.
+rdk_warm_blender_server() {
+  local uvx_bin out
+  if ! uvx_bin=$(rdk_find_uvx); then
+    rdk_warn "uvx not found, so the Blender MCP server cannot be prepared (macOS: brew install uv)"
+    return 1
+  fi
+  rdk_info "preparing the Blender MCP server $RDK_BLENDER_MCP_VERSION in uv's cache (the first time downloads ~200 MB, about a minute)"
+  if out=$("$uvx_bin" --from "$RDK_BLENDER_MCP_SPEC" blender-mcp --help 2>&1); then
+    rdk_info "Blender MCP server ready"
+    return 0
+  fi
+  printf '%s\n' "$out" | tail -n 5 >&2
+  rdk_warn "could not prepare the Blender MCP server; the first MCP session may time out while uvx downloads it"
+  return 1
+}
+
 # --- Roblox Studio -------------------------------------------------------------
 
 rdk_find_studio_mcp() {
@@ -356,59 +412,207 @@ rdk_harness_skills_dir() {
   esac
 }
 
-# rdk_mcp_launch_lines HARNESS: print "name<TAB>command args..." per registered server.
-# Claude Code: user scope plus local scope for $PWD. Needs jq for JSON configs.
+# --- MCP registrations ---------------------------------------------------------
+# Launch lines are "name<TAB>command args..." and feed the duplicate check.
+
+# rdk_json_launch_lines FILE FILTER: launch lines for the server map that jq FILTER selects
+# ($cwd is bound to $PWD). Needs jq.
+rdk_json_launch_lines() {
+  [ -f "$1" ] || return 0
+  rdk_has_jq || return 1
+  jq -r --arg cwd "$PWD" "$2"' | to_entries[]
+    | "\(.key)\t\(.value.command // .value.url // "") \((.value.args // []) | join(" "))"' "$1"
+}
+
+# rdk_toml_launch_lines FILE: launch lines for Codex-style [mcp_servers.<name>] tables;
+# subtables such as [mcp_servers.<name>.env] belong to their server.
+rdk_toml_launch_lines() {
+  [ -f "$1" ] || return 0
+  awk '
+    /^[[:space:]]*\[/ {
+      cur = ""
+      if (match($0, /^[[:space:]]*\[mcp_servers\.[^].]+/)) {
+        cur = substr($0, RSTART, RLENGTH)
+        sub(/^[[:space:]]*\[mcp_servers\./, "", cur)
+        gsub(/"/, "", cur)
+        if (!(cur in seen)) { seen[cur] = 1; order[++n] = cur }
+      }
+      next
+    }
+    cur != "" && /^[[:space:]]*(command|args)[[:space:]]*=/ { launch[cur] = launch[cur] " " $0 }
+    END { for (i = 1; i <= n; i++) print order[i] "\t" launch[order[i]] }
+  ' "$1"
+}
+
+# rdk_json_has_server FILE FILTER NAME. Without jq it greps the whole file, which may also
+# match a same-named server in another scope of that file.
+rdk_json_has_server() {
+  [ -f "$1" ] || return 1
+  if rdk_has_jq; then
+    jq -e --arg cwd "$PWD" --arg n "$3" "$2"' | has($n)' "$1" >/dev/null 2>&1
+  else
+    grep -Eq "\"$3\"[[:space:]]*:[[:space:]]*\\{" "$1"
+  fi
+}
+
+rdk_toml_has_server() { rdk_toml_launch_lines "$1" | cut -f1 | grep -Fxq -- "$2"; }
+
+# rdk_project_mcp_json: ./.mcp.json as a project config. A .mcp.json next to
+# .claude-plugin/plugin.json is a plugin's bundled config (this kit's own repo), not a project's.
+rdk_project_mcp_json() {
+  [ -f "$PWD/.claude-plugin/plugin.json" ] && return 1
+  printf '%s\n' "$PWD/.mcp.json"
+}
+
+# rdk_mcp_launch_lines HARNESS: every server the harness's own configs define. Claude Code:
+# user scope, local scope for $PWD and the project's .mcp.json. OMP: its native mcp.json only.
 rdk_mcp_launch_lines() {
   local f
-  f=$(rdk_harness_mcp_config "$1") || return 1
-  [ -f "$f" ] || return 0
   case $1 in
-    codex)
-      awk '
-        /^[[:space:]]*\[/ {
-          cur = ""
-          if (match($0, /^[[:space:]]*\[mcp_servers\.[^].]+/)) {
-            cur = substr($0, RSTART, RLENGTH)
-            sub(/^[[:space:]]*\[mcp_servers\./, "", cur)
-            gsub(/"/, "", cur)
-            if (!(cur in seen)) { seen[cur] = 1; order[++n] = cur }
-          }
-          next
-        }
-        cur != "" && /^[[:space:]]*(command|args)[[:space:]]*=/ { launch[cur] = launch[cur] " " $0 }
-        END { for (i = 1; i <= n; i++) print order[i] "\t" launch[order[i]] }
-      ' "$f"
-      ;;
     claude)
-      rdk_has_jq || return 1
-      jq -r --arg cwd "$PWD" '
-        [(.mcpServers // {}), (.projects[$cwd].mcpServers // {})] | add | to_entries[]
-        | "\(.key)\t\(.value.command // .value.url // "") \((.value.args // []) | join(" "))"' "$f"
+      rdk_json_launch_lines "$(rdk_claude_json)" '[(.mcpServers // {}), (.projects[$cwd].mcpServers // {})] | add' || return 1
+      if f=$(rdk_project_mcp_json); then rdk_json_launch_lines "$f" '(.mcpServers // {})'; fi
       ;;
-    pi | omp)
-      rdk_has_jq || return 1
-      jq -r '(.mcpServers // {}) | to_entries[]
-        | "\(.key)\t\(.value.command // .value.url // "") \((.value.args // []) | join(" "))"' "$f"
-      ;;
+    codex) rdk_toml_launch_lines "$(rdk_codex_config)" ;;
+    pi) rdk_json_launch_lines "$(rdk_pi_mcp_json)" '(.mcpServers // {})' ;;
+    omp) rdk_json_launch_lines "$(rdk_omp_mcp_json)" '(.mcpServers // {})' ;;
+    *) return 1 ;;
   esac
 }
 
-# rdk_mcp_has HARNESS NAME: true when NAME is registered for HARNESS.
-rdk_mcp_has() {
-  local f
-  f=$(rdk_harness_mcp_config "$1") || return 1
-  [ -f "$f" ] || return 1
-  if [ "$1" = codex ] || rdk_has_jq; then
-    rdk_mcp_launch_lines "$1" | cut -f1 | grep -Fxq -- "$2"
-  else
-    # Without jq this may also match a same-named server in another Claude project scope.
-    grep -Eq "\"$2\"[[:space:]]*:[[:space:]]*\\{" "$f"
-  fi
+# rdk_mcp_where HARNESS NAME: print where the harness gets server NAME from; fails if it doesn't.
+rdk_mcp_where() {
+  local h=$1 n=$2 f
+  case $h in
+    claude)
+      f=$(rdk_claude_json)
+      if rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
+        rdk_tilde "$f"
+      elif rdk_json_has_server "$f" '(.projects[$cwd].mcpServers // {})' "$n"; then
+        printf '%s, local scope for this directory\n' "$(rdk_tilde "$f")"
+      elif f=$(rdk_project_mcp_json) && rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
+        printf './.mcp.json, project scope\n'
+      else
+        return 1
+      fi
+      ;;
+    codex) f=$(rdk_codex_config) && rdk_toml_has_server "$f" "$n" && rdk_tilde "$f" ;;
+    pi) f=$(rdk_pi_mcp_json) && rdk_json_has_server "$f" '(.mcpServers // {})' "$n" && rdk_tilde "$f" ;;
+    omp) rdk_omp_where "$n" ;;
+    *) return 1 ;;
+  esac
 }
+
+rdk_mcp_has() { rdk_mcp_where "$1" "$2" >/dev/null; }
 
 # rdk_mcp_names_matching HARNESS ERE: names whose command/args match ERE.
 rdk_mcp_names_matching() {
   rdk_mcp_launch_lines "$1" | awk -F '\t' -v re="$2" '$2 ~ re { print $1 }'
+}
+
+# --- Oh My Pi imports ----------------------------------------------------------
+# OMP reads its own mcp.json first, then other tools' configs; across sources the first
+# definition of a name wins. Project-level sources (<project>/.mcp.json, .codex/config.toml)
+# load unless `mcp.enableProjectConfig: false`. Foreign user-level sources (~/.claude.json,
+# ~/.codex/config.toml, Claude Code's plugins) load only when `enabledProviders` lists them
+# (default []); `disabledProviders` wins; a set CLAUDE_CONFIG_DIR opts Claude Code in.
+
+rdk_omp_config_yml() { printf '%s\n' "$RDK_HOME/.omp/agent/config.yml"; }
+
+# rdk_omp_list_setting KEY: plain entries of a top-level YAML list (block or [inline]).
+# Path-scoped entries ({path: ..., providers: [...]}) are not evaluated.
+rdk_omp_list_setting() {
+  local f
+  f=$(rdk_omp_config_yml)
+  [ -f "$f" ] || return 0
+  awk -v key="$1" '
+    function emit(v) { gsub(/^[[:space:]"'\'']+|[[:space:]"'\'']+$/, "", v); if (v != "") print v }
+    $0 ~ "^" key ":" {
+      rest = $0
+      sub("^" key ":[[:space:]]*", "", rest)
+      sub(/[[:space:]]*#.*/, "", rest)
+      if (rest ~ /^\[/) {
+        gsub(/[][]/, "", rest)
+        n = split(rest, parts, ",")
+        for (i = 1; i <= n; i++) emit(parts[i])
+        exit
+      }
+      in_list = 1
+      next
+    }
+    in_list && /^[^[:space:]#-]/ { exit }
+    in_list && /^[[:space:]]*-[[:space:]]*[^[:space:]:#]+[[:space:]]*(#.*)?$/ {
+      v = $0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", v)
+      sub(/[[:space:]]*#.*/, "", v)
+      emit(v)
+    }
+  ' "$f"
+}
+
+# rdk_omp_user_source_enabled PROVIDER: true when OMP loads that foreign user-level source.
+rdk_omp_user_source_enabled() {
+  rdk_omp_list_setting disabledProviders | grep -Fxq -- "$1" && return 1
+  if [ "$1" = claude ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then return 0; fi
+  if [ "$1" = claude-plugins ]; then
+    rdk_omp_list_setting disabledProviders | grep -Fxq claude && return 1
+    rdk_omp_user_source_enabled claude && return 0
+  fi
+  rdk_omp_list_setting enabledProviders | grep -Exq -- "$1|\*|all"
+}
+
+rdk_omp_project_sources_enabled() {
+  local f
+  f=$(rdk_omp_config_yml)
+  [ -f "$f" ] || return 0
+  ! awk '
+    /^mcp:/ { in_mcp = 1; next }
+    in_mcp && /^[^[:space:]#]/ { in_mcp = 0 }
+    in_mcp && /^[[:space:]]+enableProjectConfig:[[:space:]]*false/ { found = 1 }
+    END { exit !found }
+  ' "$f"
+}
+
+# rdk_omp_where NAME: OMP's source for server NAME, in OMP's precedence order.
+rdk_omp_where() {
+  local n=$1 f
+  f=$(rdk_omp_mcp_json)
+  if rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
+    rdk_tilde "$f"
+    return 0
+  fi
+  if rdk_omp_project_sources_enabled; then
+    for f in "$PWD/.omp/mcp.json" "$(rdk_project_mcp_json || true)"; do
+      [ -n "$f" ] || continue
+      if rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
+        printf 'project file ./%s (imported by default)\n' "${f#"$PWD"/}"
+        return 0
+      fi
+    done
+    if rdk_toml_has_server "$PWD/.codex/config.toml" "$n"; then
+      printf 'project file ./.codex/config.toml (imported by default)\n'
+      return 0
+    fi
+  fi
+  if rdk_omp_user_source_enabled claude; then
+    f=$(rdk_claude_json)
+    if rdk_json_has_server "$f" '[(.mcpServers // {}), (.projects[$cwd].mcpServers // {})] | add' "$n"; then
+      printf 'imported from Claude Code (%s; enabledProviders)\n' "$(rdk_tilde "$f")"
+      return 0
+    fi
+  fi
+  if [ "$n" = "$RDK_BLENDER_SERVER" ] && rdk_omp_user_source_enabled claude-plugins && rdk_claude_plugin_enabled; then
+    printf 'imported from the %s Claude Code plugin (enabledProviders)\n' "$RDK_PLUGIN_NAME"
+    return 0
+  fi
+  if rdk_omp_user_source_enabled codex; then
+    f=$(rdk_codex_config)
+    if rdk_toml_has_server "$f" "$n"; then
+      printf 'imported from Codex (%s; enabledProviders)\n' "$(rdk_tilde "$f")"
+      return 0
+    fi
+  fi
+  return 1
 }
 
 # The Claude Code plugin counts as enabled when any roblox@<marketplace> entry is true

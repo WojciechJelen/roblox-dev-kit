@@ -177,7 +177,9 @@ EOF
   jq -e --arg v "$v" '.servers.blender.args | index("git+https://projects.blender.org/lab/blender_mcp.git@v" + $v + "#subdirectory=mcp")' \
     "$KIT_ROOT/mcp/servers.json" >/dev/null
   grep -q "v$v" <<<"$RDK_BLENDER_MCP_SPEC"
-  jq -e '.mcpServers.blender.command == "${CLAUDE_PLUGIN_ROOT}/mcp/blender-mcp.sh"' "$KIT_ROOT/.mcp.json" >/dev/null
+  # Launched through bash so it does not depend on the exec bit surviving plugin caching.
+  jq -e '.mcpServers.blender.command == "bash" and .mcpServers.blender.args == ["${CLAUDE_PLUGIN_ROOT}/mcp/blender-mcp.sh"]' \
+    "$KIT_ROOT/.mcp.json" >/dev/null
   # The plugin bundles only Blender; Studio is registered per harness (see PLAN §5).
   [ "$(jq '.mcpServers | length' "$KIT_ROOT/.mcp.json")" -eq 1 ]
 }
@@ -208,4 +210,112 @@ EOF
   run "$KIT_ROOT/mcp/studio-mcp.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"StudioMCP not found"* ]]
+}
+
+@test "helpers behave the same under /bin/bash (3.2 on macOS)" {
+  [ -x /bin/bash ] || skip "no /bin/bash"
+  run /bin/bash -c '
+    set -euo pipefail
+    source "$1"
+    echo "bash ${BASH_VERSINFO[0]}"
+    rdk_json_escape "a\"b\\c"$'"'"'\n\t'"'"'; echo
+    line=$(rdk_quote x "a b" "it'"'"'s" "")
+    eval "set -- $line"; echo "$# [$2] [$3] [$4]"
+    rdk_version_ge 5.10.1 5.9 && echo ge
+    rdk_version_ge 5.0.9 5.1 || echo lt
+    rdk_package_name "Motor Rivals_2"; echo
+  ' _ "$KIT_ROOT/lib/common.sh"
+  [ "$status" -eq 0 ]
+  [ "${lines[1]}" = 'a\"b\\c\n\t' ]
+  [ "${lines[2]}" = "4 [a b] [it's] []" ]
+  [ "${lines[3]}" = ge ]
+  [ "${lines[4]}" = lt ]
+  [ "${lines[5]}" = motor-rivals-2 ]
+}
+
+@test "Claude Code project .mcp.json counts as registered and feeds the duplicate check" {
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$HOME/.claude.json"
+  mkdir -p "$FAKE/proj"
+  cd "$FAKE/proj"
+  echo '{"mcpServers":{"blender":{"command":"bash","args":["/k/mcp/blender-mcp.sh"]}}}' >.mcp.json
+  [ "$(rdk_mcp_where claude Roblox_Studio)" = "~/.claude.json" ]
+  [ "$(rdk_mcp_where claude blender)" = "./.mcp.json, project scope" ]
+  [ "$(rdk_mcp_names_matching claude 'blender-mcp')" = blender ]
+}
+
+@test "rdk_rokit_tools ignores comments, including after table headers" {
+  printf '%s\n' '# toolchain' '[tools] # pinned' 'rojo = "rojo-rbx/rojo@7.7.1" # sync' '' '[other]' 'x = "y/z@1"' >"$FAKE/rokit.toml"
+  [ "$(rdk_rokit_tools "$FAKE/rokit.toml")" = "rojo	rojo-rbx/rojo@7.7.1" ]
+}
+
+@test "RDK_ROKIT_BIN_DIR follows ROKIT_ROOT and RDK_ROJO_PORT is overridable" {
+  run env ROKIT_ROOT=/opt/rk RDK_ROJO_PORT=4000 bash -c 'source "$1"; echo "$RDK_ROKIT_BIN_DIR $RDK_ROJO_PORT"' _ "$KIT_ROOT/lib/common.sh"
+  [ "$output" = "/opt/rk/bin 4000" ]
+}
+
+@test "OMP settings: block and inline lists, comments, path-scoped entries skipped" {
+  mkdir -p "$HOME/.omp/agent"
+  printf '%s\n' 'theme: x' 'enabledProviders:' '  - claude   # import Claude Code' '  - path: ~/work' '    providers: [codex]' '- gemini' 'disabledProviders: [codex, "cursor"]' >"$HOME/.omp/agent/config.yml"
+  [ "$(rdk_omp_list_setting enabledProviders | tr '\n' ' ')" = "claude gemini " ]
+  [ "$(rdk_omp_list_setting disabledProviders | tr '\n' ' ')" = "codex cursor " ]
+  [ -z "$(rdk_omp_list_setting missingKey)" ]
+}
+
+@test "OMP: native entries, then project files, then opted-in user configs" {
+  mkdir -p "$HOME/.omp/agent" "$HOME/.codex" "$FAKE/proj/.codex"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$HOME/.claude.json"
+  printf '[mcp_servers.blender]\ncommand = "uvx"\n' >"$HOME/.codex/config.toml"
+  cd "$FAKE/proj"
+
+  # Default: user-level Claude Code / Codex configs are not imported.
+  run ! rdk_omp_where Roblox_Studio
+  run ! rdk_omp_where blender
+
+  # Project-level files are imported by default...
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >.mcp.json
+  printf '[mcp_servers.blender]\ncommand = "uvx"\n' >.codex/config.toml
+  [ "$(rdk_omp_where Roblox_Studio)" = "project file ./.mcp.json (imported by default)" ]
+  [ "$(rdk_omp_where blender)" = "project file ./.codex/config.toml (imported by default)" ]
+  # ...unless mcp.enableProjectConfig is false.
+  printf 'mcp:\n  enableProjectConfig: false\n' >"$HOME/.omp/agent/config.yml"
+  run ! rdk_omp_where Roblox_Studio
+  rm .mcp.json .codex/config.toml
+
+  # enabledProviders opts the user configs in; disabledProviders wins.
+  printf 'enabledProviders: [claude, codex]\n' >"$HOME/.omp/agent/config.yml"
+  [ "$(rdk_omp_where Roblox_Studio)" = "imported from Claude Code (~/.claude.json; enabledProviders)" ]
+  [ "$(rdk_omp_where blender)" = "imported from Codex (~/.codex/config.toml; enabledProviders)" ]
+  printf 'enabledProviders: [all]\ndisabledProviders:\n  - codex\n' >"$HOME/.omp/agent/config.yml"
+  rdk_omp_where Roblox_Studio
+  run ! rdk_omp_where blender
+
+  # A set CLAUDE_CONFIG_DIR opts Claude Code in without a list entry.
+  rm "$HOME/.omp/agent/config.yml"
+  mkdir -p "$FAKE/cc"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$FAKE/cc/.claude.json"
+  CLAUDE_CONFIG_DIR="$FAKE/cc" rdk_omp_where Roblox_Studio
+
+  # The native file always comes first.
+  echo '{"mcpServers":{"blender":{"command":"uvx"}}}' >"$HOME/.omp/agent/mcp.json"
+  [ "$(rdk_omp_where blender)" = "~/.omp/agent/mcp.json" ]
+}
+
+@test "OMP imports the roblox plugin's Blender server when Claude Code is opted in" {
+  mkdir -p "$HOME/.omp/agent" "$HOME/.claude"
+  echo '{"enabledPlugins":{"roblox@roblox-dev-kit":true}}' >"$HOME/.claude/settings.json"
+  run ! rdk_omp_where blender
+  printf 'enabledProviders:\n  - claude\n' >"$HOME/.omp/agent/config.yml"
+  [ "$(rdk_omp_where blender)" = "imported from the roblox Claude Code plugin (enabledProviders)" ]
+  printf 'enabledProviders: [claude]\ndisabledProviders: [claude-plugins]\n' >"$HOME/.omp/agent/config.yml"
+  run ! rdk_omp_where blender
+}
+
+@test "a plugin's bundled .mcp.json is not mistaken for a project config" {
+  mkdir -p "$FAKE/kit/.claude-plugin"
+  cd "$FAKE/kit"
+  echo '{"name":"roblox"}' >.claude-plugin/plugin.json
+  echo '{"mcpServers":{"blender":{"command":"bash","args":["${CLAUDE_PLUGIN_ROOT}/mcp/blender-mcp.sh"]}}}' >.mcp.json
+  run ! rdk_mcp_where claude blender
+  run ! rdk_omp_where blender
+  [ -z "$(rdk_mcp_launch_lines claude)" ]
 }

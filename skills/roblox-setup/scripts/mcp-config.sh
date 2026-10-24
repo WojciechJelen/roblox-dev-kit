@@ -13,7 +13,7 @@ OMP_SCHEMA="https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/cod
 
 usage() {
   cat <<EOF
-usage: mcp-config.sh --harness claude|codex|pi|omp|all [--server NAME]... [--dry-run]
+usage: mcp-config.sh --harness claude|codex|pi|omp|all [--server NAME]... [--no-warm] [--dry-run]
 
 Registers these MCP servers (user scope) unless already present:
   $RDK_STUDIO_SERVER  Roblox Studio's built-in server (the name Studio's Quick connect uses)
@@ -22,11 +22,17 @@ Registers these MCP servers (user scope) unless already present:
 
   --harness  which harness to configure; 'all' means every installed one
   --server   only this server (repeatable)
+  --no-warm  do not pre-download the Blender server into uv's cache (a cold first start takes
+             ~45 s, longer than MCP clients wait)
   --dry-run  print the commands / JSON instead of applying them
+
+A server counts as present when the harness already gets it from somewhere: for Claude Code also
+the local scope and ./.mcp.json; for Oh My Pi also ./.mcp.json, ./.codex/config.toml and the
+Claude Code / Codex user configs that its enabledProviders setting imports.
 EOF
 }
 
-harness='' only='' dry_run=0
+harness='' only='' dry_run=0 warm=1
 while [ $# -gt 0 ]; do
   case $1 in
     --harness | --server)
@@ -35,6 +41,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --dry-run) dry_run=1 ;;
+    --no-warm) warm=0 ;;
     -h | --help)
       usage
       exit 0
@@ -79,25 +86,27 @@ resolve() {
     '{studio_mcp_bin}') rdk_find_studio_mcp ;;
     '{blender_bin}') rdk_find_blender ;;
     */*) printf '%s\n' "$1" ;;
+    uvx) rdk_find_uvx ;;
     *) command -v "$1" 2>/dev/null ;;
   esac
 }
 
 failures=0
+needs_warm=0
 
 # register HARNESS NAME
 register() {
-  local h=$1 name=$2 cfg raw cmd desc arg key value entry
+  local h=$1 name=$2 where raw cmd desc arg key value entry
   local args=() env_flags=() env_json='{}'
-  cfg=$(rdk_tilde "$(rdk_harness_mcp_config "$h")")
 
-  if rdk_mcp_has "$h" "$name"; then
-    rdk_info "$h: $name already registered ($cfg), skipping"
+  if where=$(rdk_mcp_where "$h" "$name"); then
+    rdk_info "$h: $name already registered ($where), skipping"
     return 0
   fi
   if [ "$h" = claude ] && [ "$(jq -r --arg n "$name" '.servers[$n].claudePlugin' "$SERVERS_JSON")" = true ] &&
     rdk_claude_plugin_enabled; then
     rdk_info "$h: $name is provided by the $RDK_PLUGIN_NAME plugin, skipping"
+    [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
     return 0
   fi
 
@@ -141,11 +150,13 @@ apply() {
   shift 2
   if [ $dry_run = 1 ]; then
     rdk_info "$h: would run: $(rdk_quote "$@")"
+    [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
     return 0
   fi
   rdk_info "$h: + $(rdk_quote "$@")"
   if "$@" >&2; then
     rdk_info "$h: registered $name"
+    [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
   else
     rdk_err "$h: registering $name failed"
     failures=$((failures + 1))
@@ -158,6 +169,7 @@ omp_write() {
   f=$(rdk_omp_mcp_json)
   if [ $dry_run = 1 ]; then
     rdk_info "omp: would add to $(rdk_tilde "$f"): \"$name\": $entry"
+    [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
     return 0
   fi
   mkdir -p "$(dirname "$f")"
@@ -169,6 +181,7 @@ omp_write() {
   jq --arg n "$name" --argjson e "$entry" '.mcpServers = ((.mcpServers // {}) + {($n): $e})' "$f" >"$f.tmp"
   mv "$f.tmp" "$f"
   rdk_info "omp: registered $name in $(rdk_tilde "$f")"
+  [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
 }
 
 for h in $harnesses; do
@@ -184,5 +197,13 @@ for h in $harnesses; do
     esac
   fi
 done
+
+if [ $needs_warm = 1 ] && [ $warm = 1 ]; then
+  if [ $dry_run = 1 ]; then
+    rdk_info "would run: uvx --from '$RDK_BLENDER_MCP_SPEC' blender-mcp --help (prepares uv's cache)"
+  else
+    rdk_warm_blender_server || true
+  fi
+fi
 
 [ $failures -eq 0 ] || exit 1

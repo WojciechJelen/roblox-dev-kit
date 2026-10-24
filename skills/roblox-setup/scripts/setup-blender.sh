@@ -15,7 +15,7 @@ BROWSER_UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (
 
 usage() {
   cat <<EOF
-usage: setup-blender.sh [--allow-online-access] [--zip FILE] [--no-symlink] [--force] [--dry-run]
+usage: setup-blender.sh [--allow-online-access] [--zip FILE] [--no-symlink] [--no-warm] [--force] [--dry-run]
 
 Installs the official MCP add-on $RDK_BLENDER_MCP_VERSION into Blender's "User Default" extensions repo,
 enables it with Auto Start, saves preferences, and links blender into $(rdk_tilde "$RDK_LOCAL_BIN") when
@@ -25,12 +25,14 @@ it is not on PATH.
                          The add-on refuses to start its server while it is off.
   --zip FILE             install this mcp-$RDK_BLENDER_MCP_VERSION.zip instead of downloading it
   --no-symlink           do not create the blender symlink
+  --no-warm              do not pre-download the Blender MCP server into uv's cache (offline use;
+                         without it the first MCP session can time out while uvx downloads ~200 MB)
   --force                run even though Blender is open (it may overwrite the saved preferences on exit)
   --dry-run              print what would happen
 EOF
 }
 
-allow_online=0 zip='' symlink=1 force=0 dry_run=0
+allow_online=0 zip='' symlink=1 warm=1 force=0 dry_run=0
 while [ $# -gt 0 ]; do
   case $1 in
     --allow-online-access) allow_online=1 ;;
@@ -40,6 +42,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --no-symlink) symlink=0 ;;
+    --no-warm) warm=0 ;;
     --force) force=1 ;;
     --dry-run) dry_run=1 ;;
     -h | --help)
@@ -166,7 +169,17 @@ if [ $symlink = 1 ] && ! rdk_has blender; then
   fi
 fi
 
-# --- 4. what is left for the user ---------------------------------------------------------
+# --- 4. the MCP server ------------------------------------------------------------------
+
+if [ $warm = 1 ]; then
+  if [ $dry_run = 1 ]; then
+    rdk_info "+ uvx --from '$RDK_BLENDER_MCP_SPEC' blender-mcp --help   (prepares uv's cache)"
+  else
+    rdk_warm_blender_server || true
+  fi
+fi
+
+# --- 5. what is left for the user ---------------------------------------------------------
 
 if [ "$online_access" = 0 ]; then
   rdk_warn "Blender's 'Allow Online Access' is off, so the add-on will not start its server."

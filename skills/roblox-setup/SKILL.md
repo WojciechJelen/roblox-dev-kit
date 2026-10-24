@@ -9,17 +9,19 @@ metadata:
 # Roblox setup
 
 Scripts do the deterministic work; this file says when to run which one and what to check.
-`SKILL_DIR` below is the directory that contains this SKILL.md (your harness shows it when the
-skill loads; in Oh My Pi it is `skill://roblox-setup`). Run scripts by absolute path:
-`"$SKILL_DIR/scripts/<name>.sh"`. Every script has `--help`; most have `--dry-run`.
+`SKILL_DIR` below is the directory that contains this SKILL.md: your harness shows it when the
+skill loads (Oh My Pi appends `[Skill directory: <path>]`, and `skill://roblox-setup` resolves to it
+in bash). Run scripts by absolute path: `"$SKILL_DIR/scripts/<name>.sh"`. Every script has
+`--help`; most have `--dry-run`.
 
 The opinionated stack and the reasons behind it are in [references/stack.md](references/stack.md).
 
 ## 1. Start from the doctor
 
 If the sibling `roblox-doctor` skill is installed, run
-`"$SKILL_DIR/../roblox-doctor/scripts/doctor.sh" --json` (from the project directory if there is
-one) and plan from its failures. Otherwise check the same things by hand as you go. Setup is done
+`"$SKILL_DIR/../roblox-doctor/scripts/doctor.sh" --json` (in Oh My Pi, where `../` cannot follow a
+`skill://` path: `skill://roblox-doctor/scripts/doctor.sh --json`) from the project directory if
+there is one, and plan from its failures. Otherwise check the same things by hand as you go. Setup is done
 when the doctor has no failures.
 
 ## 2. Pick the modes
@@ -41,7 +43,8 @@ and show the dry run first when one exists.
   globally when there is no project).
 - Rokit asks the user to trust each tool and refuses when it is not attached to a terminal, which is
   the case for agents. Explain what will be trusted (the tools listed in `rokit.toml`) and pass
-  `--trust` only after the user agrees.
+  `--trust` only after the user agrees; it records that trust (`rokit trust`), so later
+  `rokit install` runs, including the doctor's `--fix`, do not ask again.
 - The script never edits shell profiles. When it prints a PATH line, give it to the user to add
   themselves, and use `~/.rokit/bin/<tool>` by absolute path until they do.
 
@@ -66,20 +69,27 @@ The generated project uses one node per script; the reasons are in
 
 ### mcp
 `mcp-config.sh --harness claude|codex|pi|omp|all [--dry-run]` registers, at user scope and only when
-missing:
+the harness does not already get them from somewhere:
 - `Roblox_Studio`: Studio's own server. Studio's Quick connect already uses this name in Claude Code
   and Codex; never add a second Studio server under another name, or every tool shows up twice.
 - `blender`: the official Blender MCP server, pinned to 1.0.3. For Claude Code with the `roblox`
   plugin enabled the plugin already bundles it, so the script skips it.
-Oh My Pi does not read Claude Code or Codex user configs unless configured to, so it gets its own
-entries in `~/.omp/agent/mcp.json`. The harness must be restarted (or reloaded) to see new servers.
+Oh My Pi imports project-level configs (`./.mcp.json`, `./.codex/config.toml`) by default, but the
+Claude Code and Codex user configs (`~/.claude.json`, `~/.codex/config.toml`, Claude Code plugins)
+only when its `enabledProviders` setting lists `claude` or `codex` (default: none). When neither
+applies, the script writes its own entries to `~/.omp/agent/mcp.json`. Across sources the first
+definition of a name wins, so an import and a native entry do not duplicate tools.
+After registering `blender` the script runs the server once to fill uv's cache: a cold start takes
+about 45 s (a ~200 MB download), longer than MCP clients wait. The harness must be restarted (or
+reloaded) to see new servers.
 Studio itself must also have its MCP server turned on; see
 [references/manual-steps.md](references/manual-steps.md#roblox-studio-mcp).
 
 ### blender
 `setup-blender.sh [--allow-online-access]` installs the official add-on (checksum-verified) into
-Blender's "User Default" extensions, enables it with Auto Start, saves preferences, and links
-`blender` into `~/.local/bin` when it is not on PATH. Blender must be closed.
+Blender's "User Default" extensions, enables it with Auto Start, saves preferences, links
+`blender` into `~/.local/bin` when it is not on PATH, and pre-downloads the MCP server into uv's
+cache (`--no-warm` skips that when offline). Blender must be closed.
 - The add-on only starts its server while Blender's "Allow Online Access" preference is on. Ask the
   user before passing `--allow-online-access`; it is a Blender-wide privacy setting.
 - If the community `blender-mcp` add-on is also installed, both want port 9876: tell the user to

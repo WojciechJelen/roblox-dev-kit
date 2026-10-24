@@ -88,6 +88,10 @@ reset_checks() { C_ID=() C_STATUS=() C_DETAIL=() C_FIX=() C_ACTION=(); }
 # Context the fixes need, discovered while checking.
 PROJECT_ROOT='' BLENDER_BIN=''
 
+# Rokit installs only tools it trusts, and asks interactively the first time; install-toolchain.sh
+# --trust records that trust (rokit trust) once the user has agreed.
+ROKIT_INSTALL_FIX="rokit install (the first time without a terminal: roblox-setup scripts/install-toolchain.sh --trust)"
+
 find_project_root() {
   local d=$1
   while :; do
@@ -100,27 +104,12 @@ find_project_root() {
   done
 }
 
-# rokit_tools FILE: "alias<TAB>owner/repo@version" for each entry of the [tools] table.
-rokit_tools() {
-  awk '
-    /^[[:space:]]*\[/ { in_tools = ($0 ~ /^[[:space:]]*\[tools\][[:space:]]*$/); next }
-    in_tools {
-      line = $0
-      sub(/#.*/, "", line)
-      if (line !~ /=/) next
-      alias = line; sub(/=.*/, "", alias); gsub(/[[:space:]"]/, "", alias)
-      spec = line; sub(/^[^=]*=/, "", spec); gsub(/[[:space:]"]/, "", spec)
-      if (alias != "") print alias "\t" spec
-    }
-  ' "$1"
-}
-
 count_lines() { printf '%s\n' "$1" | grep -c . || true; }
 
 # wally_deps FILE SECTION: number of entries in [SECTION].
 wally_deps() {
   awk -v want="[$2]" '
-    /^[[:space:]]*\[/ { cur = $0; gsub(/[[:space:]]/, "", cur); next }
+    /^[[:space:]]*\[/ { cur = $0; sub(/#.*/, "", cur); gsub(/[[:space:]]/, "", cur); next }
     cur == want { line = $0; sub(/#.*/, "", line); if (line ~ /=/) n++ }
     END { print n + 0 }
   ' "$1"
@@ -149,7 +138,7 @@ section_toolchain() {
 
   if [ -n "$PROJECT_ROOT" ] && [ -f "$PROJECT_ROOT/rokit.toml" ]; then
     manifest="$PROJECT_ROOT/rokit.toml"
-    tools=$(rokit_tools "$manifest")
+    tools=$(rdk_rokit_tools "$manifest")
   else
     tools=''
     for alias in $RDK_STANDARD_TOOLS; do tools="$tools$alias"$'\t'$'\n'; done
@@ -163,16 +152,16 @@ section_toolchain() {
     if [ -z "$bin" ] && [ -x "$RDK_ROKIT_BIN_DIR/$alias" ]; then bin="$RDK_ROKIT_BIN_DIR/$alias"; fi
     if [ -z "$bin" ]; then
       if [ -n "$manifest" ]; then
-        check "toolchain.tool.$alias" fail "$alias not installed (rokit.toml pins ${version:-it})" "rokit install" rokit-install
+        check "toolchain.tool.$alias" fail "$alias not installed (rokit.toml pins ${version:-it})" "$ROKIT_INSTALL_FIX" rokit-install
       else
         check "toolchain.tool.$alias" fail "$alias not found" "roblox-setup: scripts/install-toolchain.sh --global"
       fi
       continue
     fi
     if ! out=$(cd "${PROJECT_ROOT:-$start_dir}" && "$bin" --version 2>&1); then
-      check "toolchain.tool.$alias" fail "$alias is linked but does not run: ${out%%$'\n'*}" "rokit install" rokit-install
+      check "toolchain.tool.$alias" fail "$alias is linked but does not run: ${out%%$'\n'*}" "$ROKIT_INSTALL_FIX" rokit-install
     elif [ -n "$version" ] && ! printf '%s' "$out" | grep -Fq -- "$version"; then
-      check "toolchain.tool.$alias" warn "${out%%$'\n'*}; rokit.toml pins $version" "rokit install" rokit-install
+      check "toolchain.tool.$alias" warn "${out%%$'\n'*}; rokit.toml pins $version" "$ROKIT_INSTALL_FIX" rokit-install
     else
       check "toolchain.tool.$alias" ok "${out%%$'\n'*}"
     fi
@@ -370,7 +359,7 @@ section_blender() {
 }
 
 section_mcp() {
-  local h cfg studio_names blender_names dupes
+  local h cfg where studio_names blender_names dupes
   for h in $RDK_HARNESSES; do
     if ! rdk_harness_installed "$h"; then
       check "mcp.$h" skip "$h is not installed"
@@ -378,16 +367,16 @@ section_mcp() {
     fi
     cfg=$(rdk_tilde "$(rdk_harness_mcp_config "$h")")
 
-    if rdk_mcp_has "$h" "$RDK_STUDIO_SERVER"; then
-      check "mcp.$h.studio" ok "$RDK_STUDIO_SERVER registered ($cfg)"
+    if where=$(rdk_mcp_where "$h" "$RDK_STUDIO_SERVER"); then
+      check "mcp.$h.studio" ok "$RDK_STUDIO_SERVER registered ($where)"
     else
       check "mcp.$h.studio" fail "$RDK_STUDIO_SERVER not registered ($cfg)" "roblox-setup: scripts/mcp-config.sh --harness $h"
     fi
 
     if [ "$h" = claude ] && rdk_claude_plugin_enabled; then
       check "mcp.$h.blender" ok "provided by the $RDK_PLUGIN_NAME plugin (plugin_${RDK_PLUGIN_NAME}_blender)"
-    elif rdk_mcp_has "$h" "$RDK_BLENDER_SERVER"; then
-      check "mcp.$h.blender" ok "$RDK_BLENDER_SERVER registered ($cfg)"
+    elif where=$(rdk_mcp_where "$h" "$RDK_BLENDER_SERVER"); then
+      check "mcp.$h.blender" ok "$RDK_BLENDER_SERVER registered ($where)"
     else
       check "mcp.$h.blender" fail "$RDK_BLENDER_SERVER not registered ($cfg)" "roblox-setup: scripts/mcp-config.sh --harness $h"
     fi
@@ -454,7 +443,11 @@ apply_fix() {
       ln -s "$BLENDER_BIN" "$RDK_LOCAL_BIN/blender"
       rdk_path_has "$RDK_LOCAL_BIN" || rdk_warn "$(rdk_tilde "$RDK_LOCAL_BIN") is not on PATH; add: $(rdk_path_line "$RDK_LOCAL_BIN")"
       ;;
-    rokit-install) (cd "$PROJECT_ROOT" && rokit install) ;;
+    rokit-install)
+      # Never --no-trust-check: trusting tools is the user's decision (see ROKIT_INSTALL_FIX).
+      (cd "$PROJECT_ROOT" && rokit install) ||
+        { rdk_warn "rokit install failed; if Rokit asked to trust tools, run roblox-setup scripts/install-toolchain.sh --trust"; return 1; }
+      ;;
     wally-install) (cd "$PROJECT_ROOT" && wally install) ;;
     rojo-sourcemap) (cd "$PROJECT_ROOT" && rojo sourcemap default.project.json -o sourcemap.json) ;;
     rojo-plugin) rojo plugin install ;;

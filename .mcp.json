@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "blender": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/blender-mcp.sh"
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/blender-mcp.sh"]
     }
   }
 }
