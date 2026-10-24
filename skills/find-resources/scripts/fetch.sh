@@ -292,6 +292,11 @@ else
   if [ "$res" = 2k ]; then
     printf 'note: Roblox uses PBR maps up to 1024x1024; scale 2k maps down before uploading.\n'
   fi
-  printf 'next: upload the maps (Asphalt, or upload-asset.sh FILE --name N --type Image) and set the\n'
-  printf '      SurfaceAppearance properties above on the MeshPart; CC0 needs no credit in the game.\n'
+  if [ "$(jq -r .type "$tmp/source.json")" = model ]; then
+    printf 'next: check the mesh against the 20,000-triangle cap (blender-to-roblox: check_mesh.py), then\n'
+    printf "      import the .obj with Studio's 3D Importer; CC0 needs no credit in the game.\n"
+  else
+    printf 'next: upload the maps (Asphalt, or upload-asset.sh FILE --name N --type Image) and set the\n'
+    printf '      SurfaceAppearance properties above on the MeshPart; CC0 needs no credit in the game.\n'
+  fi
 fi

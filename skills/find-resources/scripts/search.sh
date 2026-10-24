@@ -32,7 +32,7 @@ browse links for sources that have no API (Kenney, KayKit, Quaternius, itch.io, 
              by   CC0, CC-BY and licenses that allow use in a game without credit (Creator Store,
                   Pixabay); the default
              any  everything, with NC, SA and ND results marked
-  --limit    results per source (default 5, at most 50)
+  --limit    results per source (default 5, at most 50; with --type all, per source and kind)
   --json     print one JSON object (results, sources, browse links) instead of the table
   --dry-run  print the requests without sending anything
   --no-manual  leave out the browse links
