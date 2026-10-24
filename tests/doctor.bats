@@ -414,3 +414,39 @@ green_machine() {
   [ "$(status_of mcp.pi.studio)" = ok ]
   [ "$(status_of mcp.pi.blender)" = ok ]
 }
+
+@test "mcp: an explicit --project counts as inside a project, even without default.project.json" {
+  fake_logging_cmd pi
+  mkdir -p "$FAKE/plain"
+  doctor_json --section mcp --project "$FAKE/plain"
+  [ "$status" -eq 1 ]
+  [ "$(status_of mcp.pi.studio)" = fail ]
+  [[ "$(detail_of mcp.pi.studio)" != *"--project DIR"* ]]
+  [[ "$(detail_of mcp.pi.studio)" == *"not registered for this project (./.pi/mcp.json)"* ]]
+}
+
+@test "mcp: in a project without Claude Code's Blender server, the fix offers the plugin first" {
+  fake_logging_cmd claude
+  scaffold_project "$FAKE/game"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$FAKE/game/.mcp.json"
+  cd "$FAKE/game"
+  doctor_json --section mcp
+  [ "$(status_of mcp.claude.studio)" = ok ]
+  [ "$(status_of mcp.claude.blender)" = fail ]
+  fix=$(printf '%s' "$output" | jq -r '.checks[] | select(.id == "mcp.claude.blender") | .fix')
+  [[ "$fix" == "if you want the roblox plugin (it brings this server): cd "*" && claude plugin marketplace add $KIT_ROOT --scope project && claude plugin install roblox@roblox-dev-kit --scope project; otherwise roblox-setup: scripts/mcp-config.sh --harness claude --project "* ]]
+}
+
+@test "mcp: Codex servers written as inline tables or dotted keys count" {
+  fake_logging_cmd codex
+  scaffold_project "$FAKE/game"
+  mkdir -p "$FAKE/game/.codex"
+  printf '[mcp_servers]\nRoblox_Studio = { command = "/S/StudioMCP" }\nblender.command = "uvx"\n' >"$FAKE/game/.codex/config.toml"
+  cd "$FAKE/game"
+  doctor_json --section mcp
+  [ "$(status_of mcp.codex.studio)" = ok ]
+  [ "$(status_of mcp.codex.blender)" = ok ]
+  printf '[mcp_servers.blender.env]\nBLENDER_PATH = "/b"\n' >"$FAKE/game/.codex/config.toml"
+  doctor_json --section mcp
+  [ "$(status_of mcp.codex.blender)" = fail ] # an .env table alone is not a server
+}

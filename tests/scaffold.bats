@@ -127,11 +127,37 @@ setup() {
   [ ! -e "$FAKE/calls.log" ] # codex mcp add (user scope) was never called
 }
 
-@test "--install-kit from a skill copy without the kit's installer says what to run" {
+@test "--install-kit from a skill copy without the kit's installer says what to run, before creating anything" {
+  fake_logging_cmd codex
   cp -R "$KIT_ROOT/skills/roblox-setup" "$FAKE/roblox-setup"
   run bash "$FAKE/roblox-setup/scripts/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit
   [ "$status" -eq 1 ]
   [[ "$output" == *"this copy of the skill does not include"* ]]
   [[ "$output" == *"install/install.sh --harness all --project"* ]]
+  [ ! -e "$FAKE/game" ]
+}
+
+@test "--install-kit checks the harness and options before creating the project, and passes options on" {
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit=vscode
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"expected codex, pi, omp, claude or all"* ]]
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit=codex
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"codex is not installed"* ]]
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit --install-kit-args "--harness pi"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--harness is not one of"* ]]
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit-args --no-warm
+  [ "$status" -eq 2 ]
+  [ ! -e "$FAKE/game" ]
+  fake_studio
+  fake_cmd uvx 'exit 0'
+  fake_logging_cmd codex
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit=codex --install-kit-args "--dry-run --no-warm"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--project $(cd "$FAKE/game" && pwd -P) --dry-run --no-warm"* ]]
+  [[ "$output" == *"codex: would add to"* ]]
   [ -f "$FAKE/game/default.project.json" ]
+  [ ! -e "$FAKE/game/.agents" ]
+  [ ! -e "$FAKE/game/.codex" ]
 }

@@ -14,7 +14,7 @@ OMP_SCHEMA="https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/cod
 
 usage() {
   cat <<EOF
-usage: mcp-config.sh --harness claude|codex|pi|omp|all [--project DIR] [--server NAME]... [--no-warm] [--dry-run]
+usage: mcp-config.sh --harness claude|codex|pi|omp|all [--project DIR [--force]] [--server NAME]... [--no-warm] [--dry-run]
 
 Registers these MCP servers (user scope, or the project's files with --project) unless already present:
   $RDK_STUDIO_SERVER  Roblox Studio's built-in server (the name Studio's Quick connect uses)
@@ -28,7 +28,8 @@ Registers these MCP servers (user scope, or the project's files with --project) 
                pi      DIR/.pi/mcp.json      (pi mcp add -l, run in DIR)
                omp     DIR/.omp/mcp.json     (written directly)
              Codex and pi read these only in projects you trust; Claude Code asks once to approve
-             servers from a project .mcp.json.
+             servers from a project .mcp.json. DIR must be the project's root: a folder inside a
+             Rojo project is refused unless --force, and a plugin folder always.
   --server   only this server (repeatable)
   --no-warm  do not pre-download the Blender server into uv's cache (a cold first start takes
              ~45 s, longer than MCP clients wait)
@@ -42,7 +43,7 @@ enabledProviders setting imports.
 EOF
 }
 
-harness='' only='' project='' dry_run=0 warm=1
+harness='' only='' project='' dry_run=0 warm=1 force=0
 while [ $# -gt 0 ]; do
   case $1 in
     --harness | --server | --project)
@@ -56,6 +57,7 @@ while [ $# -gt 0 ]; do
       ;;
     --dry-run) dry_run=1 ;;
     --no-warm) warm=0 ;;
+    --force) force=1 ;;
     -h | --help)
       usage
       exit 0
@@ -75,7 +77,8 @@ done
 rdk_has jq || rdk_die "mcp-config.sh needs jq (macOS 15+ ships it; otherwise: brew install jq)"
 if [ -n "$project" ]; then
   [ -d "$project" ] || rdk_die "not a directory: $project"
-  project=$(cd "$project" && pwd)
+  project=$(cd "$project" && pwd -P)
+  rdk_check_project_target "$project" "$force"
   # Every "already registered?" lookup now also reads this project's files.
   RDK_PROJECT_DIR=$project
 fi
@@ -205,22 +208,56 @@ omp_write() {
     return 0
   fi
   mkdir -p "$(dirname "$f")"
-  if [ -f "$f" ]; then
-    [ -n "$project" ] || cp "$f" "$f.bak"
+  # A missing or empty file starts from the skeleton.
+  if [ -s "$f" ]; then
+    [ -n "$project" ] || cp -p "$f" "$f.bak"
+    input=$(cat "$f")
   else
-    jq -n --arg s "$OMP_SCHEMA" '{"$schema": $s, mcpServers: {}}' >"$f"
+    input=$(jq -n --arg s "$OMP_SCHEMA" '{"$schema": $s, mcpServers: {}}')
   fi
-  jq --arg n "$name" --argjson e "$entry" '.mcpServers = ((.mcpServers // {}) + {($n): $e})' "$f" >"$f.tmp"
+  # Write beside the file, then move it into place; copying first keeps the file's mode (it can
+  # hold OAuth headers). Anything but a JSON object is left alone and reported.
+  if [ -e "$f" ]; then cp -p "$f" "$f.tmp"; else : >"$f.tmp"; fi
+  if ! err=$(jq --arg n "$name" --argjson e "$entry" \
+    'if type != "object" then error("the top level is not a JSON object") else .mcpServers = ((.mcpServers // {}) + {($n): $e}) end' \
+    <<<"$input" 2>&1 >"$f.tmp") || ! jq -e 'type == "object"' "$f.tmp" >/dev/null 2>&1; then
+    rm -f "$f.tmp"
+    rdk_err "omp: could not add $name to $(rdk_tilde "$f"): ${err:-no output from jq}; the file is unchanged, fix it and run again"
+    failures=$((failures + 1))
+    return 0
+  fi
   mv "$f.tmp" "$f"
   rdk_info "omp: registered $name in $(rdk_tilde "$f")"
   [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
 }
 
+# toml_python: a python3 that has tomllib (3.11+), used to validate TOML; empty when there is none.
+# RDK_NO_TOMLLIB=1 pretends there is none (the tests use it).
+toml_python() {
+  [ "${RDK_NO_TOMLLIB:-0}" != 1 ] && rdk_has python3 && python3 -I -c 'import tomllib' 2>/dev/null && command -v python3
+}
+
+# toml_check PYTHON FILE: print why FILE is not valid TOML; fail then.
+toml_check() {
+  local msg
+  msg=$("$1" -I -c 'import sys, tomllib
+try:
+    tomllib.load(open(sys.argv[1], "rb"))
+except Exception as ex:
+    print(ex)
+    sys.exit(1)' "$2" 2>&1) && return 0
+  printf '%s\n' "$msg"
+  return 1
+}
+
 # codex_project_write NAME ENTRY: append [mcp_servers.NAME] (and its .env table) to the project's
 # .codex/config.toml. `codex mcp add` only writes the user config. JSON strings and string arrays
-# are valid TOML basic strings and arrays, so jq renders the values.
+# are valid TOML basic strings and arrays, so jq renders the values. An existing file must stay
+# valid TOML: with tomllib the result is checked before it replaces the file; without it, files
+# that define mcp_servers as a table, dotted keys or inline, or that already mention NAME, are
+# left for the user to edit by hand.
 codex_project_write() {
-  local name=$1 entry=$2 f toml
+  local name=$1 entry=$2 f toml py why='' tmp
   f=$(rdk_codex_project_config)
   toml=$(jq -r --arg n "$name" '
     "[mcp_servers.\($n)]",
@@ -228,6 +265,22 @@ codex_project_write() {
     (if (.args // []) == [] then empty else "args = \(.args | tojson)" end),
     (if (.env // {}) == {} then empty
      else "", "[mcp_servers.\($n).env]", (.env | to_entries[] | "\(.key) = \(.value | tojson)") end)' <<<"$entry")
+  py=$(toml_python || true)
+  if [ -s "$f" ]; then
+    if [ -n "$py" ]; then
+      why=$(toml_check "$py" "$f") && why='' || why="it is not valid TOML ($why)"
+    elif grep -Eq '^[[:space:]]*(\[[[:space:]]*"?mcp_servers"?[[:space:]]*\]|"?mcp_servers"?[[:space:]]*[.=])' "$f"; then
+      why="it defines mcp_servers as a table, dotted keys or inline, which this script can only extend safely with Python 3.11+ (tomllib)"
+    elif grep -Eq "^[[:space:]]*\\[[[:space:]]*\"?mcp_servers\"?\\.\"?$name\"?[].]" "$f"; then
+      why="it already has part of $name (such as [mcp_servers.$name.env]) but not its own table"
+    fi
+  fi
+  if [ -n "$why" ]; then
+    rdk_err "codex: not adding $name to $(rdk_tilde "$f"): $why. Add this by hand:"
+    printf '%s\n' "$toml" | sed 's/^/    /' >&2
+    failures=$((failures + 1))
+    return 0
+  fi
   if [ $dry_run = 1 ]; then
     rdk_info "codex: would add to $(rdk_tilde "$f"):"
     printf '%s\n' "$toml" | sed 's/^/    /' >&2
@@ -235,8 +288,17 @@ codex_project_write() {
     return 0
   fi
   mkdir -p "$(dirname "$f")"
-  [ ! -s "$f" ] || toml=$'\n'$toml
-  printf '%s\n' "$toml" >>"$f"
+  tmp="$f.rdk-tmp"
+  if [ -e "$f" ]; then cp -p "$f" "$tmp"; else : >"$tmp"; fi
+  [ ! -s "$tmp" ] || toml=$'\n'$toml
+  printf '%s\n' "$toml" >>"$tmp"
+  if [ -n "$py" ] && ! why=$(toml_check "$py" "$tmp"); then
+    rm -f "$tmp"
+    rdk_err "codex: not adding $name to $(rdk_tilde "$f"): the result would not be valid TOML ($why); the file is unchanged. Add it by hand."
+    failures=$((failures + 1))
+    return 0
+  fi
+  mv "$tmp" "$f"
   rdk_info "codex: registered $name in $(rdk_tilde "$f")"
   [ "$name" != "$RDK_BLENDER_SERVER" ] || needs_warm=1
 }

@@ -93,12 +93,30 @@ else
 fi
 
 rdk_info ""
-rdk_info "MCP servers are still registered. To remove the Blender server too:"
-for h in $harnesses; do
-  case $h in
-    claude) rdk_info "  claude mcp remove -s user $RDK_BLENDER_SERVER   (not needed if it comes from the $RDK_PLUGIN_NAME plugin)" ;;
-    codex) rdk_info "  codex mcp remove $RDK_BLENDER_SERVER" ;;
-    pi) rdk_info "  pi mcp remove $RDK_BLENDER_SERVER" ;;
-    omp) rdk_info "  omp: delete the \"$RDK_BLENDER_SERVER\" entry from $(rdk_tilde "$(rdk_omp_mcp_json)") (or use /mcp in omp)" ;;
-  esac
-done
+if [ -n "$project" ]; then
+  # Per-project installs registered both servers in the project's own files (and Claude Code may
+  # have the plugin at project scope); show how to remove them from there.
+  in_dir="cd $(rdk_quote "$project") &&"
+  rdk_info "MCP servers are still registered in the project's files. To remove them too:"
+  for h in $harnesses; do
+    case $h in
+      claude)
+        rdk_info "  $in_dir claude mcp remove -s project $RDK_STUDIO_SERVER; claude mcp remove -s project $RDK_BLENDER_SERVER"
+        rdk_info "  $in_dir claude plugin uninstall $RDK_PLUGIN_NAME@$RDK_MARKETPLACE_NAME --scope project   (if the plugin was installed there)"
+        ;;
+      codex) rdk_info "  codex: delete [mcp_servers.$RDK_STUDIO_SERVER] and [mcp_servers.$RDK_BLENDER_SERVER] (and their .env tables) from $(rdk_tilde "$project")/.codex/config.toml" ;;
+      pi) rdk_info "  $in_dir pi mcp remove $RDK_STUDIO_SERVER -l; pi mcp remove $RDK_BLENDER_SERVER -l" ;;
+      omp) rdk_info "  omp: delete the \"$RDK_STUDIO_SERVER\" and \"$RDK_BLENDER_SERVER\" entries from $(rdk_tilde "$project")/.omp/mcp.json" ;;
+    esac
+  done
+else
+  rdk_info "MCP servers are still registered. To remove the Blender server too:"
+  for h in $harnesses; do
+    case $h in
+      claude) rdk_info "  claude mcp remove -s user $RDK_BLENDER_SERVER   (not needed if it comes from the $RDK_PLUGIN_NAME plugin)" ;;
+      codex) rdk_info "  codex mcp remove $RDK_BLENDER_SERVER" ;;
+      pi) rdk_info "  pi mcp remove $RDK_BLENDER_SERVER" ;;
+      omp) rdk_info "  omp: delete the \"$RDK_BLENDER_SERVER\" entry from $(rdk_tilde "$(rdk_omp_mcp_json)") (or use /mcp in omp)" ;;
+    esac
+  done
+fi

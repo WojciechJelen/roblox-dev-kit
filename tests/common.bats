@@ -339,3 +339,40 @@ EOF
   [ "$(jq -r .name "$KIT_ROOT/.claude-plugin/marketplace.json")" = "$RDK_MARKETPLACE_NAME" ]
   [ "$(jq -r '.plugins[0].name' "$KIT_ROOT/.claude-plugin/marketplace.json")" = "$RDK_PLUGIN_NAME" ]
 }
+
+@test "codex TOML: inline tables and dotted keys define servers; a lone .env subtable does not" {
+  f="$FAKE/config.toml"
+  check_names() { [ "$(rdk_toml_launch_lines "$f" | cut -f1 | tr '\n' ' ')" = "$1" ]; }
+  printf '[mcp_servers]\nRoblox_Studio = { command = "/S/StudioMCP" }\n"blender".command = "uvx"\nlinear.url = "https://x"\n' >"$f"
+  check_names "Roblox_Studio blender linear "
+  printf 'model = "o3"\nmcp_servers.Roblox_Studio.command = "/S/StudioMCP"\nmcp_servers.blender.env.A = "b"\n' >"$f"
+  check_names "Roblox_Studio "
+  printf 'mcp_servers = { Roblox_Studio = { command = "/S/StudioMCP", env = { A = "b" } }, blender = { command = "uvx" } }\n' >"$f"
+  check_names "Roblox_Studio blender "
+  printf '[mcp_servers.blender.env]\nBLENDER_PATH = "/b"\n# [mcp_servers.ghost]\n' >"$f"
+  check_names ""
+  printf '[mcp_servers.blender.env]\nBLENDER_PATH = "/b"\n\n[mcp_servers.blender]\nargs = ["blender-mcp"]\n' >"$f"
+  check_names "blender "
+  [[ "$(rdk_toml_launch_lines "$f")" == *"blender-mcp"* ]]
+}
+
+@test "plugin enablement: the most specific settings file that mentions the plugin decides" {
+  mkdir -p "$HOME/.claude" "$FAKE/game/.claude"
+  RDK_PROJECT_DIR="$FAKE/game"
+  on='{"enabledPlugins":{"roblox@roblox-dev-kit":true}}'
+  off='{"enabledPlugins":{"roblox@roblox-dev-kit":false}}'
+  other='{"enabledPlugins":{"formatter@x":true}}'
+  echo "$on" >"$HOME/.claude/settings.json"
+  rdk_claude_plugin_enabled
+  echo "$off" >"$FAKE/game/.claude/settings.local.json" # local beats user
+  run ! rdk_claude_plugin_enabled
+  echo "$on" >"$FAKE/game/.claude/settings.json" # local still beats project
+  run ! rdk_claude_plugin_enabled
+  echo "$other" >"$FAKE/game/.claude/settings.local.json" # local no longer mentions it: project decides
+  rdk_claude_plugin_enabled
+  echo "$off" >"$FAKE/game/.claude/settings.json"
+  run ! rdk_claude_plugin_enabled
+  RDK_NO_JQ=1 run ! rdk_claude_plugin_enabled # the grep fallback agrees
+  rm "$FAKE/game/.claude/settings.json" "$FAKE/game/.claude/settings.local.json"
+  RDK_NO_JQ=1 rdk_claude_plugin_enabled
+}

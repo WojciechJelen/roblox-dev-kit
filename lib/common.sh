@@ -156,6 +156,32 @@ except OSError: sys.exit(1)' "$1" "$2" 2>/dev/null
 
 # --- projects ------------------------------------------------------------------
 
+# rdk_find_project_root DIR: the nearest directory at or above DIR holding default.project.json.
+rdk_find_project_root() {
+  local d=$1
+  while :; do
+    if [ -f "$d/default.project.json" ]; then
+      printf '%s\n' "$d"
+      return 0
+    fi
+    [ "$d" = / ] && return 1
+    d=$(dirname "$d")
+  done
+}
+
+# rdk_check_project_target DIR [FORCE]: exit unless DIR (physical path) is a sensible place for
+# per-project agent files. A plugin folder is not a project; a subfolder of a Rojo project is
+# refused unless FORCE is 1, because agents read project files from the folder they start in.
+rdk_check_project_target() {
+  local dir=$1 root
+  if [ -f "$dir/.claude-plugin/plugin.json" ]; then
+    rdk_die "$dir is a Claude Code plugin (it has .claude-plugin/plugin.json), not a project; pass the game's folder"
+  fi
+  if root=$(rdk_find_project_root "$dir") && [ "$root" != "$dir" ] && [ "${2:-0}" != 1 ]; then
+    rdk_die "$dir is inside the Rojo project $root, and agents read project files from the folder they start in (normally the project root). Use --project $root, or add --force to write into $dir anyway."
+  fi
+}
+
 # rdk_check_project_name NAME: names end up in JSON, TOML, Markdown and sed replacements;
 # this character set needs no escaping in any of them.
 rdk_check_project_name() {
@@ -395,8 +421,11 @@ rdk_pi_mcp_json() { printf '%s\n' "$RDK_HOME/.pi/agent/mcp.json"; }
 rdk_omp_mcp_json() { printf '%s\n' "$RDK_HOME/.omp/agent/mcp.json"; }
 
 # Project-level configs belong to the project the scripts work on: RDK_PROJECT_DIR (set by
-# mcp-config.sh --project and by the doctor inside a project), else the current directory.
-rdk_project_dir() { printf '%s\n' "${RDK_PROJECT_DIR:-$PWD}"; }
+# mcp-config.sh --project and by the doctor inside a project), else the current directory. Paths
+# are physical: Claude Code keys its local scope by the real path, not a symlinked one.
+rdk_project_dir() {
+  if [ -n "${RDK_PROJECT_DIR:-}" ]; then printf '%s\n' "$RDK_PROJECT_DIR"; else pwd -P; fi
+}
 rdk_codex_project_config() { printf '%s/.codex/config.toml\n' "$(rdk_project_dir)"; }
 rdk_pi_project_mcp_json() { printf '%s/.pi/mcp.json\n' "$(rdk_project_dir)"; }
 rdk_omp_project_mcp_json() { printf '%s/.omp/mcp.json\n' "$(rdk_project_dir)"; }
@@ -432,23 +461,54 @@ rdk_json_launch_lines() {
     | "\(.key)\t\(.value.command // .value.url // "") \((.value.args // []) | join(" "))"' "$1"
 }
 
-# rdk_toml_launch_lines FILE: launch lines for Codex-style [mcp_servers.<name>] tables;
-# subtables such as [mcp_servers.<name>.env] belong to their server.
+# rdk_toml_launch_lines FILE: launch lines for the MCP servers a Codex-style config.toml defines.
+# A server counts when it has its own table ([mcp_servers.<name>]) or, inline or with dotted keys,
+# a command or url: `<name> = { command = ... }` or `<name>.command = ...` under [mcp_servers],
+# or `mcp_servers.<name>.command = ...` at the top, or a one-line `mcp_servers = { <name> = {...} }`.
+# Subtables such as [mcp_servers.<name>.env] belong to their server but do not define it.
 rdk_toml_launch_lines() {
   [ -f "$1" ] || return 0
   awk '
-    /^[[:space:]]*\[/ {
-      cur = ""
-      if (match($0, /^[[:space:]]*\[mcp_servers\.[^].]+/)) {
-        cur = substr($0, RSTART, RLENGTH)
-        sub(/^[[:space:]]*\[mcp_servers\./, "", cur)
-        gsub(/"/, "", cur)
-        if (!(cur in seen)) { seen[cur] = 1; order[++n] = cur }
+    function unquote(s) { gsub(/["'\''[:space:]]/, "", s); return s }
+    function note(name, text) {
+      if (!(name in seen)) { seen[name] = 1; order[++n] = name }
+      if (text != "") launch[name] = launch[name] " " text
+    }
+    # key_line NAME_INDEX: a "a.b.c = value" line seen from a table; parts[NAME_INDEX] is the server.
+    function key_line(i,    k, parts, cnt, key) {
+      k = $0; sub(/=.*/, "", k); k = unquote(k)
+      cnt = split(k, parts, ".")
+      if (cnt < i) return
+      key = (cnt == i) ? "" : parts[i + 1]
+      if (key == "" || key == "command" || key == "url") { note(parts[i], $0); defined[parts[i]] = 1 }
+      else if (key == "args" && cnt == i + 1) note(parts[i], $0)
+    }
+    # inline_servers TEXT: names at brace depth 1 of a one-line `mcp_servers = { a = {...}, b = {...} }`.
+    function inline_servers(text,    i, c, depth, tok, name) {
+      depth = 0; tok = ""
+      for (i = 1; i <= length(text); i++) {
+        c = substr(text, i, 1)
+        if (c == "{") {
+          if (depth == 1) { name = tok; sub(/=.*/, "", name); name = unquote(name); if (name != "") { note(name, text); defined[name] = 1 } }
+          depth++; tok = ""
+        } else if (c == "}") { depth--; tok = "" }
+        else if (c == ",") tok = ""
+        else tok = tok c
       }
+    }
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*\[/ {
+      h = $0; sub(/^[[:space:]]*\[+/, "", h); sub(/\].*$/, "", h); h = unquote(h)
+      table = h; cur = ""
+      if (h ~ /^mcp_servers\.[^.]+$/) { cur = substr(h, 13); note(cur, ""); defined[cur] = 1 }
       next
     }
+    !/=/ { next }
+    table == "" && /^[[:space:]]*"?mcp_servers"?[[:space:]]*\./ { key_line(2); next }
+    table == "" && /^[[:space:]]*"?mcp_servers"?[[:space:]]*=/ { inline_servers($0); next }
+    table == "mcp_servers" { key_line(1); next }
     cur != "" && /^[[:space:]]*(command|args)[[:space:]]*=/ { launch[cur] = launch[cur] " " $0 }
-    END { for (i = 1; i <= n; i++) print order[i] "\t" launch[order[i]] }
+    END { for (i = 1; i <= n; i++) if (order[i] in defined) print order[i] "\t" launch[order[i]] }
   ' "$1"
 }
 
@@ -488,7 +548,7 @@ rdk_mcp_launch_lines() {
     codex)
       rdk_toml_launch_lines "$(rdk_codex_config)"
       # In the home directory the "project" file is the user config itself.
-      [ "$(rdk_codex_project_config)" = "$(rdk_codex_config)" ] || rdk_toml_launch_lines "$(rdk_codex_project_config)"
+      [ "$(rdk_codex_project_config)" -ef "$(rdk_codex_config)" ] || rdk_toml_launch_lines "$(rdk_codex_project_config)"
       ;;
     pi)
       rdk_json_launch_lines "$(rdk_pi_mcp_json)" '(.mcpServers // {})' || return 1
@@ -656,21 +716,32 @@ rdk_omp_where() {
   return 1
 }
 
-# The Claude Code plugin counts as enabled when any roblox@<marketplace> entry is true in the user
-# settings or in the project's settings: `claude plugin install --scope project` writes
-# .claude/settings.json, `--scope local` .claude/settings.local.json (enabledPlugins).
+# rdk_claude_plugin_enabled: whether Claude Code enables the roblox plugin for the project.
+# `claude plugin install --scope local|project|user` writes enabledPlugins "roblox@<marketplace>" to
+# .claude/settings.local.json, .claude/settings.json or ~/.claude/settings.json; the most specific
+# file that mentions the plugin decides, in that order (code.claude.com/docs/en/plugins/loading.md).
+# The --settings flag, --add-dir and managed settings are not read.
 rdk_claude_plugin_enabled() {
-  local f d
+  local f d v
   d=$(rdk_project_dir)
-  for f in "$(rdk_claude_dir)/settings.json" "$d/.claude/settings.json" "$d/.claude/settings.local.json"; do
+  for f in "$d/.claude/settings.local.json" "$d/.claude/settings.json" "$(rdk_claude_dir)/settings.json"; do
     [ -f "$f" ] || continue
     if rdk_has_jq; then
-      jq -e --arg p "$RDK_PLUGIN_NAME@" \
-        '[(.enabledPlugins // {}) | to_entries[] | select((.key | startswith($p)) and .value == true)] | length > 0' \
-        "$f" >/dev/null 2>&1 && return 0
+      # "true", "false", or nothing when this file does not mention the plugin.
+      v=$(jq -r --arg p "$RDK_PLUGIN_NAME@" \
+        '[(.enabledPlugins // {}) | to_entries[] | select(.key | startswith($p)) | .value == true]
+         | if length == 0 then empty elif any then "true" else "false" end' "$f" 2>/dev/null || true)
+    elif grep -Eq "\"$RDK_PLUGIN_NAME@[^\"]+\"[[:space:]]*:[[:space:]]*true" "$f"; then
+      v=true
+    elif grep -Eq "\"$RDK_PLUGIN_NAME@[^\"]+\"[[:space:]]*:" "$f"; then
+      v=false
     else
-      grep -Eq "\"$RDK_PLUGIN_NAME@[^\"]+\"[[:space:]]*:[[:space:]]*true" "$f" && return 0
+      v=''
     fi
+    case $v in
+      true) return 0 ;;
+      false) return 1 ;;
+    esac
   done
   return 1
 }

@@ -9,6 +9,9 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/common.sh"
 
 ALL_SECTIONS="toolchain project studio blender mcp cloud"
+# The kit's root (for the plugin's marketplace path): three levels above this script's real folder.
+KIT_ROOT=$(cd "$(cd "$SCRIPT_DIR" && pwd -P)/../../.." && pwd -P)
+[ -f "$KIT_ROOT/.claude-plugin/marketplace.json" ] || KIT_ROOT='<path to roblox-dev-kit>'
 
 usage() {
   cat <<EOF
@@ -33,7 +36,7 @@ usage_error() {
   exit 2
 }
 
-json=0 fix=0 quiet=0 online=0
+json=0 fix=0 quiet=0 online=0 project_given=0
 [ "${RDK_NETWORK_TESTS:-0}" = 1 ] && online=1
 sections=$ALL_SECTIONS
 start_dir=$PWD
@@ -46,11 +49,11 @@ while [ $# -gt 0 ]; do
     --online) online=1 ;;
     --section | --project)
       [ $# -ge 2 ] || usage_error "$1 needs a value"
-      if [ "$1" = --section ]; then sections=${2//,/ }; else start_dir=$2; fi
+      if [ "$1" = --section ]; then sections=${2//,/ }; else start_dir=$2 project_given=1; fi
       shift
       ;;
     --section=*) sections=${1#--section=} sections=${sections//,/ } ;;
-    --project=*) start_dir=${1#--project=} ;;
+    --project=*) start_dir=${1#--project=} project_given=1 ;;
     -h | --help)
       usage
       exit 0
@@ -92,17 +95,6 @@ PROJECT_ROOT='' BLENDER_BIN=''
 # --trust records that trust (rokit trust) once the user has agreed.
 ROKIT_INSTALL_FIX="rokit install (the first time without a terminal: roblox-setup scripts/install-toolchain.sh --trust)"
 
-find_project_root() {
-  local d=$1
-  while :; do
-    if [ -f "$d/default.project.json" ]; then
-      printf '%s\n' "$d"
-      return 0
-    fi
-    [ "$d" = / ] && return 1
-    d=$(dirname "$d")
-  done
-}
 
 count_lines() { printf '%s\n' "$1" | grep -c . || true; }
 
@@ -358,14 +350,21 @@ section_blender() {
   fi
 }
 
-# missing_server HARNESS ID NAME: report a server the harness does not get. Inside a project it is
-# a failure (registered nowhere the harness reads for this project). Outside any project only the
-# user scope is visible, and per-project registration is a valid choice, so it is a warning.
+# missing_server HARNESS ID NAME: report a server the harness does not get. Inside a project (a
+# Rojo project found upward, or the folder given with --project) it is a failure: registered
+# nowhere the harness reads for this project. Outside any project only the user scope is visible,
+# and per-project registration is a valid choice, so it is a warning.
 missing_server() {
-  local h=$1 id=$2 name=$3
-  if [ -n "$PROJECT_ROOT" ]; then
-    check "$id" fail "$name not registered for this project ($(project_files "$h")) or at user scope ($(rdk_tilde "$(rdk_harness_mcp_config "$h")"))" \
-      "roblox-setup: scripts/mcp-config.sh --harness $h --project $(rdk_quote "$PROJECT_ROOT")"
+  local h=$1 id=$2 name=$3 dir fix
+  if [ -n "$PROJECT_ROOT" ] || [ "$project_given" = 1 ]; then
+    dir=${PROJECT_ROOT:-$start_dir}
+    fix="roblox-setup: scripts/mcp-config.sh --harness $h --project $(rdk_quote "$dir")"
+    if [ "$h" = claude ] && [ "$name" = "$RDK_BLENDER_SERVER" ]; then
+      # install.sh --project prints these plugin commands instead of adding a loose Blender server;
+      # adding one now would later run beside the plugin's.
+      fix="if you want the $RDK_PLUGIN_NAME plugin (it brings this server): cd $(rdk_quote "$dir") && claude plugin marketplace add $(rdk_quote "$KIT_ROOT") --scope project && claude plugin install $RDK_PLUGIN_NAME@$RDK_MARKETPLACE_NAME --scope project; otherwise $fix"
+    fi
+    check "$id" fail "$name not registered for this project ($(project_files "$h")) or at user scope ($(rdk_tilde "$(rdk_harness_mcp_config "$h")"))" "$fix"
   else
     check "$id" warn "$name not registered at user scope ($(rdk_tilde "$(rdk_harness_mcp_config "$h")")); project-level registration is fine: run the doctor inside the project (or with --project DIR)" \
       "per project: roblox-setup scripts/mcp-config.sh --harness $h --project DIR; user scope: --harness $h"
@@ -451,7 +450,7 @@ section_cloud() {
 run_checks() {
   local s
   reset_checks
-  PROJECT_ROOT=$(find_project_root "$start_dir" || true)
+  PROJECT_ROOT=$(rdk_find_project_root "$start_dir" || true)
   for s in $sections; do "section_$s"; done
 }
 

@@ -58,10 +58,11 @@ setup() {
   fake_cmd uvx 'exit 0'
   fake_cmd claude "{ printf '%s:' \"\$PWD\"; printf ' [%s]' \"\$@\"; echo; } >>\"$FAKE/calls.log\""
   mkdir -p "$FAKE/game"
+  GAME=$(cd "$FAKE/game" && pwd -P)
   run bash "$INSTALL" --harness claude --project "$FAKE/game" --no-warm
   [ "$status" -eq 0 ]
-  [[ "$output" == *"cd $FAKE/game && claude plugin marketplace add $KIT_ROOT --scope project"* ]]
-  [[ "$output" == *"cd $FAKE/game && claude plugin install roblox@roblox-dev-kit --scope project"* ]]
+  [[ "$output" == *"cd $GAME && claude plugin marketplace add $KIT_ROOT --scope project"* ]]
+  [[ "$output" == *"cd $GAME && claude plugin install roblox@roblox-dev-kit --scope project"* ]]
   [ ! -e "$FAKE/game/.claude/skills" ]
   run ! grep -q 'plugin' "$FAKE/calls.log" # printed only
   [ "$(wc -l <"$FAKE/calls.log" | tr -d ' ')" -eq 1 ]
@@ -83,7 +84,7 @@ setup() {
   [[ "$output" != *"add-json -s project blender"* ]]
   rm "$FAKE/game/.claude/settings.json"
   run bash "$INSTALL" --harness claude --project "$FAKE/game" --no-plugin --dry-run
-  [[ "$output" == *"would link    $FAKE/game/.claude/skills/roblox-setup"* ]]
+  [[ "$output" == *"would link    $(cd "$FAKE/game" && pwd -P)/.claude/skills/roblox-setup"* ]]
   [[ "$output" == *"claude mcp add-json -s project Roblox_Studio"* ]]
   [[ "$output" == *"claude mcp add-json -s project blender"* ]]
   [ ! -e "$FAKE/calls.log" ]
@@ -190,4 +191,35 @@ setup() {
   [[ "$output" == *"codex is not installed"* ]]
   run bash "$INSTALL" --harness all
   [ "$status" -eq 1 ]
+}
+
+@test "--project must be the project's root (or --force) and not a plugin folder" {
+  fake_logging_cmd codex
+  scaffold_project "$FAKE/game"
+  run bash "$INSTALL" --harness codex --project "$FAKE/game/src" --no-mcp
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is inside the Rojo project"* ]]
+  [ ! -e "$FAKE/game/src/.agents" ]
+  run bash "$INSTALL" --harness codex --project "$FAKE/game/src" --no-mcp --force
+  [ "$status" -eq 0 ]
+  [ -L "$FAKE/game/src/.agents/skills/roblox-setup" ]
+  run bash "$INSTALL" --harness codex --project "$KIT_ROOT" --dry-run
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is a Claude Code plugin"*"not a project"* ]]
+}
+
+@test "uninstall --project explains how to remove the project's MCP entries" {
+  fake_logging_cmd claude
+  fake_logging_cmd codex
+  fake_logging_cmd pi
+  fake_logging_cmd omp
+  mkdir -p "$FAKE/game"
+  run bash "$UNINSTALL" --harness all --project "$FAKE/game"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claude mcp remove -s project Roblox_Studio"* ]]
+  [[ "$output" == *"claude plugin uninstall roblox@roblox-dev-kit --scope project"* ]]
+  [[ "$output" == *"pi mcp remove blender -l"* ]]
+  [[ "$output" == *"/.codex/config.toml"* ]]
+  [[ "$output" == *"/.omp/mcp.json"* ]]
+  [[ "$output" != *"-s user"* ]]
 }

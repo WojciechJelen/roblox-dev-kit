@@ -198,9 +198,10 @@ fake_cwd_cmd() {
 @test "--project claude: claude mcp add-json -s project, run in the project" {
   fake_cwd_cmd claude
   mkdir -p "$FAKE/game"
+  GAME=$(cd "$FAKE/game" && pwd -P) # the scripts print physical paths
   run bash "$MCP" --harness claude --project "$FAKE/game" --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" == *"claude: would run in $FAKE/game: claude mcp add-json -s project Roblox_Studio '{\"type\":\"stdio\",\"command\":\"$STUDIO\",\"args\":[],\"env\":{}}'"* ]]
+  [[ "$output" == *"claude: would run in $GAME: claude mcp add-json -s project Roblox_Studio '{\"type\":\"stdio\",\"command\":\"$STUDIO\",\"args\":[],\"env\":{}}'"* ]]
   [ ! -e "$FAKE/calls.log" ]
   run bash "$MCP" --harness claude --project "$FAKE/game" --no-warm
   [ "$status" -eq 0 ]
@@ -230,9 +231,10 @@ fake_cwd_cmd() {
   fake_cwd_cmd codex
   mkdir -p "$FAKE/game/.codex"
   printf 'model = "o3"\n\n[mcp_servers.linear]\nurl = "https://mcp.linear.app/mcp"\n' >"$FAKE/game/.codex/config.toml"
+  GAME=$(cd "$FAKE/game" && pwd -P)
   run bash "$MCP" --harness codex --project "$FAKE/game" --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" == *"codex: would add to $FAKE/game/.codex/config.toml:"* ]]
+  [[ "$output" == *"codex: would add to $GAME/.codex/config.toml:"* ]]
   [[ "$output" == *"[mcp_servers.blender.env]"* ]]
   [ "$(grep -c mcp_servers "$FAKE/game/.codex/config.toml")" -eq 1 ]
   run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm
@@ -311,4 +313,133 @@ print(json.dumps(tomllib.load(open(sys.argv[1], "rb")), sort_keys=True))' "$FAKE
   run bash "$MCP" --harness codex --project "$FAKE/nope"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not a directory"* ]]
+}
+
+# toml_ok FILE: FILE parses as TOML (Python's tomllib).
+toml_ok() { python3 -I -c 'import sys, tomllib; tomllib.load(open(sys.argv[1], "rb"))' "$1"; }
+
+@test "--project codex: servers defined inline or with dotted keys count, and the file stays valid TOML" {
+  fake_cwd_cmd codex
+  mkdir -p "$FAKE/game/.codex"
+  printf '[mcp_servers]\nRoblox_Studio = { command = "/S/StudioMCP" }\n' >"$FAKE/game/.codex/config.toml"
+  run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Roblox_Studio already registered (./.codex/config.toml"* ]]
+  toml_ok "$FAKE/game/.codex/config.toml"
+  grep -q '^\[mcp_servers.blender\]$' "$FAKE/game/.codex/config.toml"
+  printf 'mcp_servers.Roblox_Studio.command = "/S/StudioMCP"\n' >"$FAKE/game/.codex/config.toml"
+  run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm --server Roblox_Studio
+  [[ "$output" == *"Roblox_Studio already registered"* ]]
+  toml_ok "$FAKE/game/.codex/config.toml"
+}
+
+@test "--project codex: a result that would not be valid TOML is refused and the file is left alone" {
+  fake_cwd_cmd codex
+  mkdir -p "$FAKE/game/.codex"
+  f="$FAKE/game/.codex/config.toml"
+  # A top-level inline table cannot take another [mcp_servers.x] table.
+  printf 'mcp_servers = { linear = { url = "https://x" } }\n' >"$f"
+  before=$(cat "$f")
+  run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"the result would not be valid TOML"* ]]
+  [ "$(cat "$f")" = "$before" ]
+  [ ! -e "$f.rdk-tmp" ]
+  # Only an .env subtable: not registered, and appending the full block would declare .env twice.
+  printf '[mcp_servers.blender.env]\nBLENDER_PATH = "/b"\n' >"$f"
+  run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm --server blender
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not adding blender"* ]]
+  printf 'model = \n' >"$f"
+  run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm --server blender
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is not valid TOML"* ]]
+}
+
+@test "--project codex without tomllib: forms it cannot extend safely are left for the user, with the block to add" {
+  fake_cwd_cmd codex
+  mkdir -p "$FAKE/game/.codex"
+  f="$FAKE/game/.codex/config.toml"
+  printf '[mcp_servers]\nlinear = { url = "https://x" }\n' >"$f"
+  RDK_NO_TOMLLIB=1 run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm --server blender
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"can only extend safely with Python 3.11+"* ]]
+  [[ "$output" == *"[mcp_servers.blender]"* ]]
+  [ "$(cat "$f")" = "$(printf '[mcp_servers]\nlinear = { url = "https://x" }')" ]
+  printf '[mcp_servers.blender.env]\nBLENDER_PATH = "/b"\n' >"$f"
+  RDK_NO_TOMLLIB=1 run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm --server blender
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"already has part of blender"* ]]
+  printf 'model = "o3"\n' >"$f"
+  RDK_NO_TOMLLIB=1 run bash "$MCP" --harness codex --project "$FAKE/game" --no-warm --server blender
+  [ "$status" -eq 0 ]
+  toml_ok "$f"
+}
+
+@test "omp: an empty mcp.json starts from the skeleton; invalid JSON is reported and the rest goes on" {
+  fake_logging_cmd omp
+  fake_cwd_cmd pi
+  mkdir -p "$FAKE/game/.omp"
+  : >"$FAKE/game/.omp/mcp.json"
+  run bash "$MCP" --harness omp --project "$FAKE/game" --no-warm
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.mcpServers | keys | join(",")' "$FAKE/game/.omp/mcp.json")" = "Roblox_Studio,blender" ]
+  jq -e '."$schema"' "$FAKE/game/.omp/mcp.json" >/dev/null
+  printf '{"mcpServers": {' >"$FAKE/game/.omp/mcp.json"
+  run bash "$MCP" --harness all --project "$FAKE/game" --no-warm
+  [ "$status" -eq 1 ]
+  grep -qF ": [mcp] [add] [blender] [-l]" "$FAKE/calls.log" # pi, before omp, was done
+  [[ "$output" == *"omp: could not add Roblox_Studio"* ]]
+  [[ "$output" == *"omp: could not add blender"* ]] # the next server was still tried
+  [ "$(cat "$FAKE/game/.omp/mcp.json")" = '{"mcpServers": {' ]
+  [ ! -e "$FAKE/game/.omp/mcp.json.tmp" ]
+  echo '[1, 2]' >"$FAKE/game/.omp/mcp.json"
+  run bash "$MCP" --harness omp --project "$FAKE/game" --no-warm
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not a JSON object"* ]]
+}
+
+@test "omp: rewriting mcp.json keeps the file's mode, at user scope and in a project" {
+  fake_logging_cmd omp
+  mkdir -p "$HOME/.omp/agent" "$FAKE/game/.omp"
+  for f in "$HOME/.omp/agent/mcp.json" "$FAKE/game/.omp/mcp.json"; do
+    echo '{"mcpServers":{"linear":{"type":"http","url":"https://x","headers":{"Authorization":"Bearer t"}}}}' >"$f"
+    chmod 600 "$f"
+  done
+  # The project first: once the user file has the servers, a project run would (rightly) skip them.
+  run bash "$MCP" --harness omp --project "$FAKE/game" --no-warm
+  [ "$status" -eq 0 ]
+  run bash "$MCP" --harness omp --no-warm
+  [ "$status" -eq 0 ]
+  for f in "$HOME/.omp/agent/mcp.json" "$FAKE/game/.omp/mcp.json"; do
+    [ "$(jq -r '.mcpServers | keys | join(",")' "$f")" = "Roblox_Studio,blender,linear" ]
+    [ "$(ls -l "$f" | cut -c1-10)" = "-rw-------" ]
+  done
+}
+
+@test "--project refuses a folder inside a Rojo project (unless --force) and a plugin folder" {
+  fake_cwd_cmd codex
+  scaffold_project "$FAKE/game"
+  run bash "$MCP" --harness codex --project "$FAKE/game/src" --no-warm
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is inside the Rojo project"*"Use --project"*"/game, or add --force"* ]]
+  [ ! -e "$FAKE/game/src/.codex" ]
+  run bash "$MCP" --harness codex --project "$FAKE/game/src" --no-warm --force
+  [ "$status" -eq 0 ]
+  [ -f "$FAKE/game/src/.codex/config.toml" ]
+  run bash "$MCP" --harness codex --project "$KIT_ROOT" --dry-run
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is a Claude Code plugin (it has .claude-plugin/plugin.json), not a project"* ]]
+}
+
+@test "--project through a symlink uses the real path, so Claude Code's local scope still counts" {
+  fake_cwd_cmd claude
+  mkdir -p "$FAKE/real/game"
+  ln -s "$FAKE/real" "$FAKE/link"
+  real=$(cd "$FAKE/real/game" && pwd -P)
+  jq -n --arg p "$real" '{projects: {($p): {mcpServers: {Roblox_Studio: {command: "/S/StudioMCP"}}}}}' >"$HOME/.claude.json"
+  run bash "$MCP" --harness claude --project "$FAKE/link/game" --no-warm --server Roblox_Studio
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Roblox_Studio already registered (~/.claude.json, local scope for this directory)"* ]]
+  [ ! -e "$FAKE/calls.log" ]
 }

@@ -9,7 +9,7 @@ source "$ROOT/lib/common.sh"
 
 usage() {
   cat <<EOF
-usage: install.sh --harness codex|pi|omp|claude|all [--project DIR] [--no-plugin] [--copy] [--no-mcp] [--no-warm] [--dry-run]
+usage: install.sh --harness codex|pi|omp|claude|all [--project DIR [--force]] [--no-plugin] [--copy] [--no-mcp] [--no-warm] [--dry-run]
 
 Links every skill in $(rdk_tilde "$ROOT")/skills into:
   codex, pi, omp  ~/.agents/skills/   (all three read it)
@@ -21,6 +21,7 @@ Links every skill in $(rdk_tilde "$ROOT")/skills into:
                  Claude Code gets the roblox plugin at project scope: the script prints the two
                  claude plugin commands to run (they write DIR/.claude/settings.json) and registers
                  only Roblox Studio's server, because the plugin bundles Blender's.
+                 DIR must be the project's root (a folder inside a Rojo project needs --force).
   --no-plugin    with --project, give Claude Code loose skills in DIR/.claude/skills/ and both MCP
                  servers in DIR/.mcp.json instead of the plugin
   --copy         copy the skill folders instead of symlinking (for machines where this repo won't stay)
@@ -30,7 +31,7 @@ Links every skill in $(rdk_tilde "$ROOT")/skills into:
 EOF
 }
 
-harness='' project='' copy=0 mcp=1 dry_run=0 plugin=1 warm=1
+harness='' project='' copy=0 mcp=1 dry_run=0 plugin=1 warm=1 force=0
 while [ $# -gt 0 ]; do
   case $1 in
     --harness | --project)
@@ -42,6 +43,7 @@ while [ $# -gt 0 ]; do
     --no-plugin) plugin=0 ;;
     --no-mcp) mcp=0 ;;
     --no-warm) warm=0 ;;
+    --force) force=1 ;;
     --dry-run) dry_run=1 ;;
     -h | --help)
       usage
@@ -61,7 +63,8 @@ done
 }
 if [ -n "$project" ]; then
   [ -d "$project" ] || rdk_die "not a directory: $project"
-  project=$(cd "$project" && pwd)
+  project=$(cd "$project" && pwd -P)
+  rdk_check_project_target "$project" "$force"
   # Plugin and MCP lookups read this project's settings and config files.
   RDK_PROJECT_DIR=$project
 fi
@@ -158,6 +161,7 @@ if [ $mcp = 1 ]; then
   for h in $harnesses; do
     flags=(--harness "$h")
     [ -z "$project" ] || flags+=(--project "$project")
+    [ $force = 0 ] || flags+=(--force)
     # The plugin brings the Blender server; only Studio's goes into the project's .mcp.json.
     if [ "$h" = claude ] && claude_plugin_route; then flags+=(--server "$RDK_STUDIO_SERVER"); fi
     [ $warm = 1 ] || flags+=(--no-warm)
