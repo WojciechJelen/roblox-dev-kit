@@ -515,6 +515,28 @@ EOF
   [[ "$output" == *"require-id      Workspace.Loader:1"* ]]
 }
 
+@test "scan: a LinkedSource is a high finding even when the source is empty" {
+  require_lune
+  cat >"$BATS_TEST_TMPDIR/linked.rbxmx" <<'EOF'
+<roblox version="4">
+  <Item class="Model" referent="RBX0">
+    <Properties><string name="Name">Lamp</string></Properties>
+    <Item class="ModuleScript" referent="RBX1">
+      <Properties>
+        <string name="Name">Config</string>
+        <Content name="LinkedSource"><url>rbxassetid://987654321</url></Content>
+        <ProtectedString name="Source"></ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>
+EOF
+  run --separate-stderr bash "$SCAN" "$BATS_TEST_TMPDIR/linked.rbxmx" --json
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.findings[0] | "\(.severity) \(.rule) \(.script)"' <<<"$output")" = "high linked-source Lamp.Config" ]
+  [[ "$(jq -r '.findings[0].message' <<<"$output")" == *"rbxassetid://987654321"* ]]
+}
+
 @test "scan: unreadable input and usage errors exit 2" {
   require_lune
   run bash "$SCAN" "$FIX/garbage.rbxm"

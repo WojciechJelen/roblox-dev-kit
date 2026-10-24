@@ -16,11 +16,11 @@ Lists every script in FILE (full name, class, enabled, run context, lines, bytes
   high    require(<asset id>) or require() of a computed value, getfenv/setfenv, loadstring,
           string.char() chains, long \\ddd escape runs, string.reverse decoders, obfuscator
           markers (Luraph, IronBrew, MoonSec, PSU), HttpService GetAsync/PostAsync/RequestAsync,
-          lines longer than --max-line characters
+          a LinkedSource, lines longer than --max-line characters
   medium  purchase prompts (MarketplaceService:Prompt*Purchase), TeleportService,
-          InsertService:LoadAsset, ScriptContext, require kept in a variable, scripts inside a
-          Sound, Decal, Texture, Weld, Attachment, Motor6D or value object, script names with
-          leading/trailing spaces or non-ASCII characters
+          InsertService:LoadAsset, AssetService:LoadAssetAsync, ScriptContext, require kept in
+          a variable, scripts inside a Sound, Decal, Texture, Weld, Attachment, Motor6D or value
+          object, script names with leading/trailing spaces or non-ASCII characters
 
   --json        print one JSON object: file, instances, verdict, summary, scripts, findings
   --max-line N  lines longer than N characters count as obfuscated (default 500)

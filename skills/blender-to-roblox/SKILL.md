@@ -24,6 +24,9 @@ The limits, the export settings and where each fact comes from are in
 [references/export-rules.md](references/export-rules.md). Read it before changing a model's scale,
 axes, textures or collision.
 
+No model yet? The **find-resources** skill looks for a free one first (Creator Store, Kenney, Poly
+Haven, Sketchfab), checks its license and scans its scripts; bring the file it finds back here.
+
 ## Pick the path
 
 - **Live Blender** (the user has the scene open and the Blender MCP tools such as

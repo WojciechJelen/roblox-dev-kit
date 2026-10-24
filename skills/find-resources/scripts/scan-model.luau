@@ -299,7 +299,7 @@ local lineRules: { LineRule } = {
 		severity = "medium",
 		check = function(line)
 			if string.find(line, "LoadAsset%a*%s*%(") then
-				return "InsertService:LoadAsset loads another asset by id while the game runs"
+				return "InsertService:LoadAsset or AssetService:LoadAssetAsync loads another asset by id while the game runs"
 			end
 			return nil
 		end,
@@ -365,6 +365,12 @@ local function scanScript(inst: Instance)
 	end
 	sourceBytes += #source
 	classCounts[inst.ClassName] = (classCounts[inst.ClassName] or 0) + 1
+	local okLinked, linked = pcall(function()
+		return (inst :: any).LinkedSource
+	end)
+	if okLinked and type(linked) == "string" and linked ~= "" then
+		add("high", "linked-source", inst, nil, linked, "LinkedSource loads this script's code from another asset (" .. printable(linked, 80) .. ")")
+	end
 
 	local httpAliases: { [string]: boolean } = { HttpService = true }
 	for alias in string.gmatch(source, "([%a_][%w_]*)%s*=%s*game%s*:%s*GetService%s*%(%s*[\"']HttpService[\"']%s*%)") do

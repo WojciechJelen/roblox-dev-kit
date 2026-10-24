@@ -81,7 +81,8 @@ and show the dry run first when one exists.
 `scaffold.sh <dir> "<Project Name>"` copies `assets/template/`: strict Luau, services/controllers,
 Wally, StyLua/Selene/luau-lsp config, GitHub Actions CI, `AGENTS.md` and `CLAUDE.md`. It refuses a
 non-empty directory unless `--force`. The folder ↔ DataModel mapping is in
-[references/template-layout.md](references/template-layout.md).
+[references/template-layout.md](references/template-layout.md). The template's `AGENTS.md` tells
+agents to find free assets before building them by hand; the **find-resources** skill does that.
 Right after scaffolding, offer the per-project install so the new game is ready for any harness:
 `scaffold.sh <dir> "<Project Name>" --install-kit` (or `--install-kit=codex` for one harness) runs
 `install.sh --harness all --project <dir>`; `--install-kit-args "--dry-run"` previews it, and
