@@ -13,6 +13,7 @@ errors=0
 PROMPT_KEYS="schema_version name description tags plugins runs expected_outcome model max_turns timeout_seconds allowed_tools append_system_prompt env"
 CASE_KEYS="schema_version name description tags plugins runs expected_outcome execution context graders"
 CONTEXT_KEYS="scaffold_script history_file add_dirs"
+EXECUTION_KEYS="model max_turns timeout_seconds allowed_tools append_system_prompt env prompt"
 GRADER_COMMON="type weight arm"
 
 fail() {
@@ -105,6 +106,8 @@ check_case() {
     check_keys case.yaml "$CASE_KEYS" $(top_keys <<<"$fm")
     # shellcheck disable=SC2046
     check_keys "case.yaml context" "$CONTEXT_KEYS" $(child_keys context <<<"$fm")
+    # shellcheck disable=SC2046
+    check_keys "case.yaml execution" "$EXECUTION_KEYS" $(child_keys execution <<<"$fm")
     script=$(sed -n 's/^[[:space:]]*scaffold_script:[[:space:]]*//p' "$dir/case.yaml" | tr -d '"'\''')
     if [ -n "$script" ]; then
       if [ ! -f "$dir/$script" ]; then

@@ -1,5 +1,5 @@
 ---
 type: tool_used
 tool: Bash
-input_match: 'adopt\.sh[^\n]*--mapping'
+input_match: 'adopt\.sh(?:\\"|[^"\\;&|])*\s--mapping\b'
 ---

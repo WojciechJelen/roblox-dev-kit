@@ -87,8 +87,10 @@ to a few rules:
 
 Roblox's own limits and export settings, each with its source page, are in
 [skills/blender-to-roblox/references/export-rules.md](skills/blender-to-roblox/references/export-rules.md):
-at most 20,000 triangles per mesh, texture maps up to 1024×1024, FBX exported with "FBX Unit Scale"
-(1 Blender unit = 1 stud), Forward Z and Up Y, textures copied and embedded.
+at most 20,000 triangles per mesh; textures up to 4096×4096, with 1024×1024 as the kit's default
+budget because it is the largest size Roblox documents for PBR maps (larger gets a warning); FBX
+exported with "FBX Unit Scale" (1 Blender unit = 1 stud), Forward Z and Up Y, textures copied and
+embedded. Only mesh objects are checked and exported; convert curves, text and metaballs first.
 
 ## Security notes
 
@@ -146,7 +148,7 @@ make all          # check-sync, lint (shellcheck, JSON, py_compile), validate (s
 - `evals/` holds `claude plugin eval` cases (`setup-empty-dir`, `doctor-missing-blender`,
   `adopt-existing`, `check-mesh-report`). They are real, billed model runs, so they are not part of
   `make all`; `scripts/validate-evals.sh` checks their structure instead. Run them with
-  `claude plugin eval . --scaffold --allow-tools Bash,Write` (add `--case <name>` for one);
+  `claude plugin eval . --scaffold --allow-tools Bash Write` (add `--case <name>` for one);
   `check-mesh-report` needs Blender on the machine (tag `requires-blender`).
 - `claude plugin validate .claude-plugin/plugin.json` and `claude plugin validate .` check the
   manifests; `scripts/release.sh X.Y.Z` bumps every version, dates the changelog, runs `make all`,

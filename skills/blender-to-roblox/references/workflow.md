@@ -85,7 +85,7 @@ load as usual; a script that saved preferences under factory settings would over
 
 | Symptom | Likely cause |
 |---|---|
-| Model imports far too big | exported with Apply Scalings "All Local" (the exporter's default, which bakes a ×100 unit factor into the coordinates) instead of FBX Unit Scale; `export_fbx.py` always sets FBX Unit Scale |
+| Model imports far too big | exported with Apply Scalings "All Local" (the exporter's default, which puts a ×100 unit factor on the root objects' transforms, `Lcl Scaling` and `Lcl Translation`, while the vertex coordinates stay as they are) instead of FBX Unit Scale; `export_fbx.py` always sets FBX Unit Scale |
 | Model is tiny | it was modelled in metres (a 4.5 m car as 4.5 units); 1 Blender unit is 1 stud (28 cm), so scale it up in Blender or export with `--scale` |
 | Lying on its side or facing backwards | axes; export with Forward Z / Up Y and keep the importer's defaults; fix orientation in Blender |
 | Dark or see-through faces | flipped normals (negative scale, mirrored without applying) or one-sided faces seen from behind |

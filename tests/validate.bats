@@ -116,7 +116,7 @@ env:
 disallowed_tools: [Agent]
 env:
   RDK_HOME: /tmp/x'
-  printf 'schema_version: 1.1\nname: other\ncontext:\n  scaffold_script: setup.sh\n  setup_env: x\n' >"$T/evals/bad-case/case.yaml"
+  printf 'schema_version: 1.1\nname: other\ncontext:\n  scaffold_script: setup.sh\n  setup_env: x\nexecution:\n  max_turns: 5\n  bogus: 1\n' >"$T/evals/bad-case/case.yaml"
   printf 'echo hi\n' >"$T/evals/bad-case/setup.sh"
   printf 'no frontmatter\n' >"$T/evals/bad-case/graders/02-plain.md"
   printf -- '---\ntype: regex\nflags: i\n---\n\n' >"$T/evals/bad-case/graders/03-empty-regex.md"
@@ -131,10 +131,46 @@ env:
   [[ "$output" == *'schema_version must be "1.1" (quoted)'* ]]
   [[ "$output" == *"name 'other' must equal the folder name"* ]]
   [[ "$output" == *"case.yaml context: unknown key 'setup_env'"* ]]
+  [[ "$output" == *"case.yaml execution: unknown key 'bogus'"* ]]
+  [[ "$output" != *"unknown key 'max_turns'"* ]]
   [[ "$output" == *"scaffold_script setup.sh is not executable"* ]]
   [[ "$output" == *"graders/02-plain.md has no frontmatter"* ]]
   [[ "$output" == *"graders/03-empty-regex.md: regex grader needs a pattern"* ]]
   [[ "$output" == *"graders/04-custom.md: unknown type 'custom'"* ]]
   [[ "$output" == *"graders/05-no-tool.md: tool_used grader needs tool"* ]]
   [[ "$output" == *"no-graders: no graders"* ]]
+}
+
+# grader_matches GRADER COMMAND: whether GRADER's input_match finds COMMAND in a Bash tool input,
+# which the eval runner sees JSON-encoded (a newline is the two characters \n, quotes are \").
+grader_matches() {
+  local pattern
+  pattern=$(sed -n "s/^input_match: '\(.*\)'\$/\1/p" "$KIT_ROOT/evals/$1")
+  [ -n "$pattern" ] || return 2
+  python3 -I -c 'import json, re, sys
+sys.exit(0 if re.search(sys.argv[1], json.dumps({"command": sys.argv[2], "description": "x"})) else 1)' "$pattern" "$2"
+}
+
+@test "eval graders that forbid a command stop at the end of that command" {
+  never=adopt-existing/graders/03-never-applies.md
+  grader_matches $never 'bash /k/adopt.sh . --mapping mapping.tsv --apply'
+  grader_matches $never 'bash "$SKILL/scripts/adopt.sh" "$PWD" --mapping "map.tsv" --apply --with-config'
+  grader_matches $never 'mv src/Factory.lua src/ReplicatedStorage/RivalsFactory.lua'
+  run ! grader_matches $never "$(printf 'bash /k/adopt.sh . --mapping m.tsv\necho "re-run with --apply to make the changes"')"
+  run ! grader_matches $never 'bash /k/adopt.sh . --mapping m.tsv && echo "then --apply"'
+  run ! grader_matches $never 'bash /k/adopt.sh . --mapping m.tsv | tee plan.txt; grep -c -- --apply plan.txt'
+
+  dry=adopt-existing/graders/02-runs-adopt-dry-run.md
+  grader_matches $dry 'cd /w && bash "/k/adopt.sh" . --mapping mapping.tsv --name "Motor Rivals"'
+  run ! grader_matches $dry "$(printf 'bash /k/adopt.sh --help\nprintf "x --mapping y"')"
+
+  fixes=doctor-missing-blender/graders/03-does-not-apply-fixes.md
+  grader_matches $fixes 'set -a; . ./machine.env; set +a; bash /k/doctor.sh --json --fix'
+  grader_matches $fixes 'ln -s /m/Blender.app/Contents/MacOS/Blender ~/.local/bin/blender'
+  run ! grader_matches $fixes "$(printf 'set -a; . ./machine.env; set +a; bash /k/doctor.sh --json\necho "--fix would add the link"')"
+}
+
+@test "the README documents --allow-tools with space-separated tools" {
+  grep -q -- '--allow-tools Bash Write' "$KIT_ROOT/README.md"
+  run ! grep -q -- '--allow-tools [A-Za-z]*,' "$KIT_ROOT/README.md"
 }

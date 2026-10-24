@@ -23,7 +23,7 @@ Sources, cited below by name:
 | Triangles per mesh | at most 20,000 ("Individual meshes can not exceed 20,000 triangles"); avatar items have their own budgets | [specifications] |
 | Vertices per mesh | no general limit documented; `check_mesh.py` reports the count only | **unverified** (none found) |
 | Topology | watertight, no exposed holes or backfaces; quads where possible (no n-gons); no zero-thickness meshes | [specifications] |
-| Texture size | up to 4096×4096 for textures in general, but "up to 1024×1024 pixel spaces for texture maps" in the UV rules and 1024×1024 as the PBR maximum, so the kit's default limit is 1024 | [textures] |
+| Texture size | up to 4096×4096 for textures in general; "up to 1024×1024 pixel spaces for texture maps" in the UV rules and 1024×1024 as the PBR maximum | [textures] |
 | Texture size guidance | 256×256 for ~5×5 stud objects, 512×512 for ~10×10, 1024×1024 for ~20×20 | [textures] |
 | Texture files uploaded on their own | `.png`, `.jpg`, `.tga`, `.bmp` | [textures] |
 | Materials | "Mesh objects can only have one material assigned" | [textures] |
@@ -32,7 +32,11 @@ Sources, cited below by name:
 | Animation | one animation track per `.fbx` export | [specifications] |
 | 3D file formats | `.fbx`, `.obj`, `.gltf` in Studio's Importer; `.fbx` and `.gltf` carry several meshes, PBR textures, cages, rigs, animation and vertex colours | [importer] |
 
-`check_mesh.py` turns the triangle and texture limits into violations and the rest into warnings.
+**kit**: `check_mesh.py` makes the triangle limit and textures over 4096 px (`--max-texture`)
+violations, and textures over 1024 px (`--texture-budget`, the PBR maximum) warnings; the rest are
+warnings too. Only images connected to a material's output count: the FBX exporter writes no others,
+so a stray, unconnected bake image only gets a warning. Only MESH objects are checked and exported;
+curves, text and metaballs need Object › Convert › Mesh first.
 
 ## Units and scale
 
@@ -68,6 +72,12 @@ Sources, cited below by name:
   first import and turn the model in Blender, not in Studio, if it faces the wrong way.
 
 ## Export dialog → `bpy.ops.export_scene.fbx`
+
+With "Limit to Selected Objects" Blender's exporter writes `context.selected_objects`
+(`io_scene_fbx/export_fbx_bin.py`, Blender 5.2.1), and that list never contains hidden (eye icon),
+viewport-disabled (monitor icon) or unselectable objects, nor objects in a collection excluded from
+the view layer. **kit**: `export_fbx.py` shows and unlocks the target objects only while it exports,
+checks that every target really is selected, and refuses objects in excluded collections.
 
 | Roblox's instruction | Operator argument (Blender 5.2.1) | Source |
 |---|---|---|

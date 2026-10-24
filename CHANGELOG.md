@@ -50,5 +50,22 @@ All notable changes to this project are documented here. The format follows
   plugin's own bundled `.mcp.json`, next to `.claude-plugin/plugin.json`, does not).
 - Wally and rokit.toml table headers with trailing comments are recognised.
 - `validate-skills.sh` also checks script names that contain underscores.
+- `export_fbx.py` exported an empty FBX for hidden, viewport-disabled or unselectable objects
+  (Blender's exporter only writes `context.selected_objects`); it now shows and unlocks them for
+  the export, restores them afterwards, and fails with a usage error when a target still is not
+  selected. Objects in a collection excluded from the view layer are a usage error (exit 2)
+  instead of a crash. `check_mesh.py` warns about all of these.
+- `check_mesh.py` counted image nodes connected to nothing (which the exporter never writes) as
+  textures; only images feeding the material output count now, others get a warning. Textures
+  over 4096 px are violations and over 1024 px (the PBR maximum, `--texture-budget`) warnings,
+  instead of treating 1024 as Roblox's import limit. Curves, text and metaballs in the checked
+  scope get a "convert to mesh" warning.
+- `render_preview.py` adds a missing `.png` to `--out` (Blender did, and the script then failed).
+- `upload-asset.sh` removes `ROBLOX_API_KEY` from its environment before running anything, so no
+  child process inherits it, and accepts any 2xx answer.
+- Eval graders that forbid a command no longer run past the end of that command in the
+  JSON-encoded tool input; `validate-evals.sh` also checks `execution:` keys; the README shows
+  `--allow-tools Bash Write`.
+- The export tests re-import every FBX in a fresh Blender and compare the objects.
 - `RDK_ROJO_PORT` and `RDK_UVX` are overridable, so tests never depend on a running `rojo serve`
   or the real uvx; the kit's CI authenticates Rokit before downloading tools.

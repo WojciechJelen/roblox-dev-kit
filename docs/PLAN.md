@@ -272,3 +272,8 @@ Windows support beyond path stubs; roblox-ts; publishing/CI for the *game* beyon
 - The template's `AGENTS.md` and `references/stack.md` said "about 20k triangles … 1 stud ≈ 0.28 m"; they now state the documented limit and that 1 Blender unit = 1 stud with FBX Unit Scale (0.28 m is the physics unit).
 - §1 said every summary tool has a `_for_cli` variant; `get_objects_summary` and `get_object_detail_summary` do not (corrected there).
 - The doctor already had the `cloud` section; it is unchanged.
+
+Review fix pass (Phase 2):
+- `export_fbx.py` shows and unlocks hidden or unselectable targets during the export (Blender's exporter writes only `context.selected_objects`) and asserts the selection; excluded collections are a usage error. Re-importing the FBX in a fresh Blender is now the standard assertion of the export tests.
+- Texture rule changed: `--max-texture` defaults to 4096 (Roblox's maximum, violation) and the new `--texture-budget` to 1024 (the PBR-map maximum, warning); only images that feed the material output count.
+- `upload-asset.sh` moves the key into an unexported variable as its first statement; any 2xx is success.

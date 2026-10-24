@@ -37,7 +37,7 @@ Every team member installs the same pinned versions with one command.
 ## Assets
 
 - **Blender** for models and animations. **Substance Painter** for textures, or the free **Material Maker**.
-- Import via Studio's 3D Importer (`.fbx`, `.obj`, `.gltf`/`.glb`) or the Roblox Blender Plugin. Limits: at most 20,000 triangles per mesh, texture maps up to 1024×1024; with "FBX Unit Scale" 1 Blender unit = 1 stud (a stud is 28 cm in Roblox physics). The `blender-to-roblox` skill has the details and sources.
+- Import via Studio's 3D Importer (`.fbx`, `.obj`, `.gltf`/`.glb`) or the Roblox Blender Plugin. Limits: at most 20,000 triangles per mesh, textures up to 4096×4096 (PBR maps up to 1024×1024); with "FBX Unit Scale" 1 Blender unit = 1 stud (a stud is 28 cm in Roblox physics). The `blender-to-roblox` skill has the details and sources.
 - PBR textures via `SurfaceAppearance`. Use simple collision (`CollisionFidelity = Box` or `Hull`).
 - No direct Unreal import: export static meshes as FBX. Materials, Blueprints and Nanite don't transfer. Check that Fab/Megascans licenses allow use outside Unreal.
 - **Asphalt** to upload images and sounds in bulk and get typed asset IDs in code.

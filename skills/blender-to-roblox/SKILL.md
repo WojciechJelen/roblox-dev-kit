@@ -1,6 +1,6 @@
 ---
 name: blender-to-roblox
-description: Gets 3D models from Blender into a Roblox game. It checks meshes against Roblox's import limits (20,000 triangles per mesh, 1024 px textures, n-gons, UVs, unapplied transforms, required part names such as a car's four wheels), exports FBX with the Blender settings Roblox documents, renders a preview to look at, uploads models, images and sounds through the Open Cloud Assets API, and inserts the result in Studio. It works with a live Blender through the official Blender MCP server or headless through Blender's command line. Use this skill whenever the user wants a car, vehicle, prop, building or any other model from Blender in their Roblox place, asks whether a mesh or .blend file is ready for Roblox or within the limits, wants an FBX exported for Studio, wants an asset uploaded or needs an asset id, or edits Blender scenes for a Roblox game, even if they never mention FBX, Open Cloud or this skill.
+description: Gets 3D models from Blender into a Roblox game. It checks meshes against Roblox's import limits (20,000 triangles per mesh, texture sizes, n-gons, UVs, unapplied transforms, hidden objects, required part names such as a car's four wheels), exports FBX with the Blender settings Roblox documents, renders a preview to look at, uploads models, images and sounds through the Open Cloud Assets API, and inserts the result in Studio. It works with a live Blender through the official Blender MCP server or headless through Blender's command line. Use this skill whenever the user wants a car, vehicle, prop, building or any other model from Blender in their Roblox place, asks whether a mesh or .blend file is ready for Roblox or within the limits, wants an FBX exported for Studio, wants an asset uploaded or needs an asset id, or edits Blender scenes for a Roblox game, even if they never mention FBX, Open Cloud or this skill.
 compatibility: Requires bash and Blender (tested with 5.2.1; the official Blender MCP add-on needs 5.1 or newer). Uploads need curl, jq and an Open Cloud API key. The live path needs the official Blender MCP server; the headless path does not.
 metadata:
   version: "0.1.0"
@@ -75,14 +75,24 @@ result = check_mesh.check(names=None)   # or names=["Body"], scope="selected", m
 ```
 
 Objects: `--objects A,B`, else the selection, else every mesh (`--selected` / `--all` force one).
-Triangles are counted after modifiers and triangulation (`--no-modifiers` for the raw mesh). With
-`--json` the report is the one stdout line that starts with `{`; `--report FILE` writes it to a file.
+Only MESH objects are checked and exported: curves, text and metaballs are listed with a warning;
+convert them first (Object › Convert › Mesh) if they belong to the model. Triangles are counted
+after modifiers and triangulation (`--no-modifiers` for the raw mesh). With `--json` the report is
+the one stdout line that starts with `{`; `--report FILE` writes it to a file.
 
-- **Violations** block the export: over `--max-tris` (default 20000) triangles, a texture larger
-  than `--max-texture` (default 1024) px, or too few objects matching `--require-names`.
-- **Warnings** are worth fixing but legal: n-gons, loose geometry, missing or extra UV maps,
-  several materials, unapplied rotation or scale, negative scale, zero thickness, unapplied
-  modifiers.
+- **Violations** block the export: over `--max-tris` (default 20000) triangles, a connected texture
+  larger than `--max-texture` (default 4096 px, Roblox's maximum), or too few objects matching
+  `--require-names`.
+- **Warnings** are worth fixing but legal: a connected texture over `--texture-budget` (default
+  1024 px, the kit's default because it is the largest size Roblox documents for PBR maps), an
+  image connected to nothing (it is not exported), n-gons, loose geometry, missing or extra UV
+  maps, several materials, unapplied rotation or scale, negative scale, zero thickness, unapplied
+  modifiers, hidden or unselectable objects, objects in a collection excluded from the view layer
+  (they cannot be exported).
+- **Check what you will ship.** `check_mesh.py` counts with modifiers by default, while
+  `export_fbx.py` applies them only with `--apply-modifiers` (and then checks with them). Export
+  with `--apply-modifiers`, or check with `--no-modifiers`, so the mesh you checked and previewed is
+  the mesh in the FBX.
 - Vehicles: pass `--require-names '^Wheel_(FL|FR|RL|RR)$' --require-count 4` (or the names the
   game's code expects) so a missing or misnamed wheel fails the check. Wheels need their origin at
   the wheel centre: `origin_offset_studs` should be about 0.
@@ -120,8 +130,9 @@ It checks first and refuses violations unless `--force` (ask the user before for
 FBX Unit Scale with every other scale at 1.0 (1 Blender unit = 1 stud), Forward Z, Up Y, Path Mode
 Copy with embedded textures, meshes only (`--with-armature` adds rigs), no leaf bones, no baked
 animation. `--per-object` writes one file per object (wheels that spin on their own), `--triangulate`
-writes triangles, `--scale` sets studs per Blender unit, `--dry-run` only plans. The scene is not
-changed. Live: `export_fbx.export("/abs/out.fbx", names=[...], apply_modifiers=True)`.
+writes triangles, `--scale` sets studs per Blender unit, `--dry-run` only plans. Hidden or
+unselectable objects are shown and unlocked only while the exporter runs (it skips them otherwise);
+objects in an excluded collection are refused (exit 2). The scene is not changed. Live: `export_fbx.export("/abs/out.fbx", names=[...], apply_modifiers=True)`.
 
 ## 5. Get it into Roblox
 
