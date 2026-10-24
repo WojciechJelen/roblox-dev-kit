@@ -378,7 +378,6 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [ "$(jq -r '[.files[] | .use] | join(",")' "$d/SOURCE.json")" = \
     "SurfaceAppearance.ColorMap,SurfaceAppearance.NormalMap,SurfaceAppearance.RoughnessMap,ARM (ambient occlusion R, roughness G, metalness B): its blue channel is the MetalnessMap" ]
   [ -f "$d/brick_4_arm_1k.jpg" ] # no Metal map, so the packed one comes along
-  [[ "$output" == *"Poly Haven does not list this set as metal, so leave MetalnessMap empty"* ]]
   grep -qxF '| Brick 4 | Rob Tuytel | CC0 | https://polyhaven.com/a/brick_4 |' "$FAKE/home/CREDITS.md"
   [ "$(url_calls dl.polyhaven.org)" -eq 4 ]
   [[ "$output" == *"brick_4_diff_1k.jpg  ->  SurfaceAppearance.ColorMap"* ]]
@@ -394,13 +393,13 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [ -f "$FAKE/game/CREDITS.md" ]
 }
 
-@test "fetch: a metal set without a Metal map brings its arm map and says how to split it" {
+@test "fetch: a set without a Metal map brings its arm map and says how to check its metalness" {
   polyhaven_routes
-  jq '.categories += ["metal"]' "$FAKE/routes/polyhaven-info-brick_4.json" >"$FAKE/routes/x" && mv "$FAKE/routes/x" "$FAKE/routes/polyhaven-info-brick_4.json"
   run bash "$FETCH" polyhaven:brick_4 --out "$FAKE/home/assets"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.metal, (.files[] | select(.map == "arm") | .file)' "$FAKE/home/assets/polyhaven/brick_4/SOURCE.json" | tr '\n' ' ')" = "true brick_4_arm_1k.jpg " ]
-  [[ "$output" == *"this metal set has no separate metal map; it is the blue channel of brick_4_arm_1k.jpg"* ]]
+  [ "$(jq -r '.files[] | select(.map == "arm") | "\(.file): \(.use)"' "$FAKE/home/assets/polyhaven/brick_4/SOURCE.json")" = \
+    "brick_4_arm_1k.jpg: ARM (ambient occlusion R, roughness G, metalness B): its blue channel is the MetalnessMap" ]
+  [[ "$output" == *"Poly Haven has no Metal map for this set"*"leave MetalnessMap empty"* ]]
   [[ "$output" == *"magick $FAKE/home/assets/polyhaven/brick_4/brick_4_arm_1k.jpg -channel B -separate $FAKE/home/assets/polyhaven/brick_4/brick_4_metal_1k.png"* ]]
   [[ "$output" == *"Separate Color node"* ]]
 }
@@ -418,7 +417,7 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [ -f "$d/brick_4_metal_1k.jpg" ]
   [ ! -e "$d/brick_4_arm_1k.jpg" ]
   [ "$(jq -r '.files[] | select(.map == "Metal") | .use' "$d/SOURCE.json")" = SurfaceAppearance.MetalnessMap ]
-  [[ "$output" != *"blue channel"* ]]
+  [[ "$output" != *"no Metal map"* ]]
 }
 
 @test "fetch: control characters in an API's names never reach the terminal, SOURCE.json or CREDITS.md" {

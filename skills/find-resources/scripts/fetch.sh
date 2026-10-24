@@ -25,9 +25,9 @@ SOURCE.json (source, id, name, authors, license, page, date, files) and adds a C
 with credit.sh.
 
   polyhaven:<id>   a Poly Haven texture: color (Diffuse), OpenGL normal (nor_gl), roughness and
-                   metalness (Metal) as JPG, MD5 checked. Sets without a Metal map get the packed
-                   arm map instead (AO red, roughness green, metalness blue) and a note on
-                   splitting its blue channel
+                   metalness (Metal) as JPG, MD5 checked. Sets without a Metal map (not metallic,
+                   in the sets checked) get the packed arm map instead (AO red, roughness green,
+                   metalness blue) and a note on checking its blue channel
   ambientcg:<id>   an ambientCG material, decal or atlas (the <res>-JPG zip; keeps Color, NormalGL,
                    Roughness, Metalness, Opacity) or 3D model (the LQ-<res>-JPG zip; also keeps
                    the .obj and .mtl)
@@ -195,10 +195,10 @@ else
           ;;
         *) rdk_die "Poly Haven did not say what kind of asset $id is" ;;
       esac
-      metal_set=$(jq -r '[(.categories // [])[] | strings | ascii_downcase] | index("metal") != null' "$tmp/api.json")
       api "https://api.polyhaven.com/files/$id"
-      # Without a Metal map, metalness is only in the packed arm map (AO red, roughness green,
-      # metalness blue): fetch that instead, and say how to split it.
+      # Sets without a Metal map get the packed arm map (AO red, roughness green, metalness blue)
+      # instead, so that metalness can be checked. In the sets measured (2026-10-24) its blue channel
+      # was black whenever the Metal map was missing: Poly Haven ships Metal for metallic sets.
       for pair in Diffuse:ColorMap nor_gl:NormalMap Rough:RoughnessMap Metal:MetalnessMap arm:ARM; do
         map=${pair%%:*} prop=${pair#*:}
         [ "$map" != arm ] || [ -z "$(jq -r '.[] | select(.map == "Metal") | .file' "$tmp/files.json")" ] || continue
@@ -299,10 +299,9 @@ else
   name=${name:-$id}
   jq -n --arg source "$src" --arg id "$id" --arg name "$name" --arg kind "$kind" --arg authors "$authors" \
     --arg page "$page" --arg res "$res" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg cc0 "$CC0_URL" \
-    --argjson metal "${metal_set:-false}" --slurpfile files "$tmp/files.json" '
+    --slurpfile files "$tmp/files.json" '
     {source: $source, id: $id, name: $name, type: $kind, authors: ($authors | split(", ")),
-     license: "CC0", licenseUrl: $cc0, page: $page, resolution: $res, downloaded: $date, metal: $metal,
-     files: $files[0]}' >"$tmp/source.json"
+     license: "CC0", licenseUrl: $cc0, page: $page, resolution: $res, downloaded: $date, files: $files[0]}' >"$tmp/source.json"
 
   for f in "$tmp/stage"/*; do
     [ ! -L "$f" ] || rdk_die "refusing $(basename "$f"): it is a link"
@@ -336,15 +335,11 @@ else
   jq -r '.files[] | "  \(.file)  ->  \(.use)"' "$tmp/source.json"
   arm=$(jq -r '.files[] | select(.map == "arm") | .file' "$tmp/source.json")
   if [ -n "$arm" ]; then
-    if [ "$(jq -r '.metal // false' "$tmp/source.json")" = true ]; then
-      printf 'metalness: this metal set has no separate metal map; it is the blue channel of %s.\n' "$arm"
-      printf '  Split it for SurfaceAppearance.MetalnessMap with ImageMagick:\n'
-      printf '    magick %s -channel B -separate %s\n' "$(rdk_quote "$dest/$arm")" "$(rdk_quote "$dest/${id}_metal_$res.png")"
-      printf '  or in Blender with a Separate Color node (use the Blue output).\n'
-    else
-      printf 'metalness: Poly Haven does not list this set as metal, so leave MetalnessMap empty; the blue\n'
-      printf '  channel of %s holds metalness if you need it.\n' "$arm"
-    fi
+    printf 'metalness: Poly Haven has no Metal map for this set, which in the sets checked means it is not\n'
+    printf '  metallic: leave MetalnessMap empty. Its metalness is the blue channel of %s; to check it\n' "$arm"
+    printf '  (black = not metal) or use it, split it with ImageMagick:\n'
+    printf '    magick %s -channel B -separate %s\n' "$(rdk_quote "$dest/$arm")" "$(rdk_quote "$dest/${id}_metal_$res.png")"
+    printf "  or in Blender with a Separate Color node (its Blue output).\n"
   fi
   printf '%s\n' "$credit_out"
   if [ "$res" = 2k ]; then

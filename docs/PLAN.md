@@ -557,7 +557,7 @@ challenge, in a headless Chrome through DevTools), and the answers the tests rep
   downloads use `curl -L`. 3D models have `LQ-`/`SQ-`/`HQ-<res>-JPG` zips; `LQ-1K-JPG` of
   3DTreeStump001 holds an `.obj`, `.mtl`, Color, NormalGL, NormalDX and AO.
 - `fetch.sh`: Poly Haven's `Metal` map is downloaded when the set has one; otherwise the packed
-  `arm` map (AO red, roughness green, metalness blue), with a note on splitting its blue channel
+  `arm` map (AO red, roughness green, metalness blue), with a note on checking its blue channel
   (see the review fixes below; at first `arm` was skipped).
   Poly Haven **models are refused** with the reason (pine_tree_01: 17,427,094 polys, the 1k FBX is
   648 MB; only 358 of 521 models are under 20,000) and HDRIs are refused (Roblox skies are six
@@ -708,12 +708,15 @@ and `legit.rbxmx` come from the reviewer's samples.
   "Cannot iterate over null" and the source vanished from `--json`. Every parse goes through
   `accept()`, which keeps only a JSON array and otherwise marks the source failed with jq's reason;
   Sketchfab's `license` and `user` are read as objects or strings.
-- Poly Haven metal sets without a `Metal` map (5 of the first 8 metal sets, checked live:
-  blue_metal_plate and green_metal_rust have none, corrugated_iron has one) came out non-metallic
-  silently. `fetch.sh` now downloads `arm` for any set without `Metal`, records it in `SOURCE.json`
-  as `ARM (ambient occlusion R, roughness G, metalness B)` with `metal` true or false (Poly Haven's
-  "metal" category), and prints the ImageMagick (`magick in.jpg -channel B -separate out.png`) or
-  Blender (Separate Color) step for metal sets.
+- Poly Haven "metal" sets without a `Metal` map (5 of the first 8; checked live:
+  blue_metal_plate and green_metal_rust have none, corrugated_iron has one) were reported as
+  losing metalness silently. Measured with ImageMagick, it is not so: their `arm` blue channel is
+  black (mean 0.001-0.005, max 0.04-0.11; painted or rusty metal is not metallic in PBR), while
+  corrugated_iron's matches its `Metal` map (mean 0.99). As asked, `fetch.sh` now downloads `arm`
+  for any set without `Metal` and records it in `SOURCE.json` as
+  `ARM (ambient occlusion R, roughness G, metalness B)`, but the message it prints says the set is
+  not metallic (leave `MetalnessMap` empty) and gives the ImageMagick / Blender step only to check
+  or use the channel. Downloading `arm` mostly costs one file; dropping it again is an option.
 - Control characters (terminal escapes) in API names reached the terminal and `CREDITS.md`; both
   scripts strip them. Ids must start with a letter or digit (`polyhaven:.` was accepted).
 - `--force` at another `--res` left the old files beside the new ones; the files the previous

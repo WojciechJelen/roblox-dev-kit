@@ -104,8 +104,8 @@ All notable changes to this project are documented here. The format follows
 - `fetch.sh` unpacks zip members with `unzip -p`, so a symlink member can no longer land in the
   asset folder (it pointed a "ColorMap" at `/etc/passwd`); links, folders and members over 200 MB
   are refused, member names with `[`, `*` or `?` unpack, and a set without a color map is refused.
-- `fetch.sh` downloads Poly Haven's packed `arm` map when a set has no `Metal` map and explains how
-  to split the metalness channel, instead of dropping metalness silently.
+- `fetch.sh` downloads Poly Haven's packed `arm` map when a set has no `Metal` map, and says that
+  such sets are not metallic (their metalness channel is black) and how to check it.
 - `fetch.sh` and `credit.sh` strip control characters from names; `fetch.sh` refuses ids that do
   not start with a letter or digit and removes the old files when a set is downloaded again at
   another resolution; `credit.sh` adds rows inside the table even when text follows it.
