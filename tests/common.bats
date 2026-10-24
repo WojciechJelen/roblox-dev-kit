@@ -74,6 +74,8 @@ setup() {
   RDK_OS=linux
   unset BLENDER_USER_RESOURCES BLENDER_USER_EXTENSIONS
   [ "$(rdk_blender_ext_dir 5.2)" = "$RDK_HOME/.config/blender/5.2/extensions" ]
+  XDG_CONFIG_HOME=/x
+  [ "$(rdk_blender_ext_dir 5.2)" = /x/blender/5.2/extensions ]
 }
 
 @test "rdk_find_blender prefers RDK_BLENDER_BIN, then PATH, then the app bundle" {
