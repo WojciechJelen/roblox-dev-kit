@@ -58,9 +58,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# cell TEXT: TEXT as one Markdown table cell (no line breaks, pipes escaped, spaces trimmed).
+# cell TEXT: TEXT as one Markdown table cell (no line breaks or other control characters, such as
+# terminal escapes; pipes escaped; spaces trimmed).
 cell() {
-  printf '%s' "$1" | tr '\r\n\t' '   ' | sed -e 's/|/\\|/g' -e 's/^ *//' -e 's/ *$//' -e 's/   */ /g'
+  printf '%s' "$1" | tr '\r\n\t' '   ' | tr -d '\000-\037\177' |
+    sed -e 's/|/\\|/g' -e 's/^ *//' -e 's/ *$//' -e 's/   */ /g'
 }
 
 name=$(cell "$name")

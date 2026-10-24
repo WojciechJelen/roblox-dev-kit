@@ -395,6 +395,18 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [[ "$output" != *"blue channel"* ]]
 }
 
+@test "fetch: control characters in an API's names never reach the terminal, SOURCE.json or CREDITS.md" {
+  polyhaven_routes
+  jq '.name = "Brick | 4 \u001b[31mRED\u001b[0m\u0007" | .authors = {"Rob\u001b[2J Tuytel": "All"}' \
+    "$FAKE/routes/polyhaven-info-brick_4.json" >"$FAKE/routes/x" && mv "$FAKE/routes/x" "$FAKE/routes/polyhaven-info-brick_4.json"
+  run bash "$FETCH" polyhaven:brick_4
+  [ "$status" -eq 0 ]
+  esc=$(printf '\033')
+  [[ "$output" != *"$esc"* ]]
+  run ! grep -q "$esc" "$FAKE/home/CREDITS.md" "$FAKE/home/assets/third-party/polyhaven/brick_4/SOURCE.json"
+  grep -qxF '| Brick \| 4 [31mRED[0m | Rob[2J Tuytel | CC0 | https://polyhaven.com/a/brick_4 |' "$FAKE/home/CREDITS.md"
+}
+
 @test "fetch: a checksum mismatch fails and leaves no files" {
   polyhaven_routes
   jq '.Rough["1k"].jpg.md5 = "0000"' "$FAKE/routes/polyhaven-files-brick_4.json" >"$FAKE/routes/x" && mv "$FAKE/routes/x" "$FAKE/routes/polyhaven-files-brick_4.json"
@@ -499,6 +511,11 @@ z.writestr("what?/Bricks100_1K-JPG_Roughness.jpg", "fake Roughness")'
   [ ! -e "$FAKE/calls.log" ]
   run bash "$FETCH" polyhaven:../../etc
   [ "$status" -eq 2 ]
+  for id in . _brick .hidden; do
+    run bash "$FETCH" "polyhaven:$id"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"starting with a letter or digit"* ]]
+  done
   run bash "$FETCH" brick_4
   [ "$status" -eq 2 ]
   run bash "$FETCH" polyhaven:brick_4 --res 4k
@@ -522,6 +539,14 @@ z.writestr("what?/Bricks100_1K-JPG_Roughness.jpg", "fake Roughness")'
   [ "$(grep -c '^| Asset | Author | License | Source |$' CREDITS.md)" -eq 1 ]
   [ "$(grep -c '^| Brick 4 |' CREDITS.md)" -eq 1 ]
   [ "$(grep -cxF '| Swords \| Shields | Lorc | CC-BY 3.0 | https://game-icons.net/1x1/lorc/sword.html |' CREDITS.md)" -eq 1 ]
+}
+
+@test "credit: control characters are dropped from every cell" {
+  run bash "$CREDIT" --name "$(printf 'Red \033[31mtree\033[0m\a')" --author "$(printf 'A\033[2Jnn')" --source https://a.example/x --license CC0
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033'* ]]
+  run ! grep -q $'\033' CREDITS.md
+  grep -qxF '| Red [31mtree[0m | A[2Jnn | CC0 | https://a.example/x |' CREDITS.md
 }
 
 @test "credit: an existing file without the table gets one appended; usage errors exit 2" {

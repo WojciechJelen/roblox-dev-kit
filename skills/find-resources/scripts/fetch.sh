@@ -10,6 +10,9 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/common.sh"
 
 CC0_URL="https://creativecommons.org/publicdomain/zero/1.0/"
+# Names and authors come from the APIs: control characters (terminal escapes) never pass.
+JQ_CLEAN='def clean: tostring | gsub("[[:cntrl:]]"; "") | gsub("^ +| +$"; ""); '
+
 # Largest file unpacked from a zip (ambientCG's 8K maps are far smaller); RDK_MAX_ZIP_MEMBER overrides it.
 MAX_MEMBER_BYTES=${RDK_MAX_ZIP_MEMBER:-$((200 * 1024 * 1024))}
 
@@ -79,7 +82,7 @@ done
 case $ref in *:*) ;; *) usage_error "expected SOURCE:ID, for example polyhaven:brick_4 (got $ref)" ;; esac
 src=${ref%%:*} id=${ref#*:}
 case $id in
-  '' | -* | *[!A-Za-z0-9_.-]* | *..*) usage_error "not a valid asset id: $id" ;;
+  [!A-Za-z0-9]* | *[!A-Za-z0-9_.-]* | *..*) usage_error "not a valid asset id: $id (letters, digits, _ . -, starting with a letter or digit)" ;;
 esac
 case $res in 1k | 2k) ;; *) usage_error "--res must be 1k or 2k" ;; esac
 [ -n "$out" ] || usage_error "--out must not be empty"
@@ -175,8 +178,8 @@ else
     polyhaven)
       api "https://api.polyhaven.com/info/$id"
       kind=$(jq -r '.type // -1' "$tmp/api.json")
-      name=$(jq -r '.name // empty' "$tmp/api.json")
-      authors=$(jq -r '(.authors // {}) | keys | join(", ")' "$tmp/api.json")
+      name=$(jq -r "$JQ_CLEAN"'.name // empty | clean' "$tmp/api.json")
+      authors=$(jq -r "$JQ_CLEAN"'(.authors // {}) | keys | map(clean) | join(", ")' "$tmp/api.json")
       case $kind in
         1) ;;
         2)
@@ -227,7 +230,7 @@ else
       jq -e --arg id "$id" '.foundAssets[0].assetId == $id' "$tmp/api.json" >/dev/null 2>&1 ||
         rdk_die "no such asset: $ref (ambientCG found nothing with that id)"
       data_type=$(jq -r '.foundAssets[0].dataType // ""' "$tmp/api.json")
-      name=$(jq -r '.foundAssets[0].displayName // empty' "$tmp/api.json")
+      name=$(jq -r "$JQ_CLEAN"'.foundAssets[0].displayName // empty | clean' "$tmp/api.json")
       authors=ambientCG
       res_upper=$(printf '%s' "$res" | tr '[:lower:]' '[:upper:]')
       case $data_type in
@@ -313,9 +316,9 @@ else
   cp "$tmp/source.json" "$dest/SOURCE.json"
 fi
 
-name=$(jq -r '.name' "$tmp/source.json")
+name=$(jq -r "$JQ_CLEAN"'.name | clean' "$tmp/source.json")
 page=$(jq -r '.page' "$tmp/source.json")
-authors=$(jq -r '.authors | join(", ")' "$tmp/source.json")
+authors=$(jq -r "$JQ_CLEAN"'.authors | map(clean) | join(", ")' "$tmp/source.json")
 credit_out=$("$SCRIPT_DIR/credit.sh" --name "$name" --source "$page" --license CC0 --author "$authors" --file "$credits" 2>&1) ||
   rdk_die "could not record the credit: $credit_out"
 
