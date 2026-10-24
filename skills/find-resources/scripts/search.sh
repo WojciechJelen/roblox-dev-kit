@@ -203,6 +203,19 @@ http_get() {
 # dry-run, then a tab and the detail), $tmp/<src>.notes (lines for the reader).
 set_status() { printf '%s\t%s\n' "$2" "${3:-}" >"$tmp/$1.status"; }
 note() { printf '%s\n' "$2" >>"$tmp/$1.notes"; }
+# accept SOURCE: the parsed answer becomes the results when it is a JSON array; anything else (jq
+# failed on a shape it did not expect) makes the source failed with an empty list, so one odd answer
+# never breaks the summary.
+accept() {
+  local why
+  if jq -e 'type == "array"' "$tmp/$1.parsed" >/dev/null 2>&1; then
+    mv "$tmp/$1.parsed" "$tmp/$1.results"
+    return 0
+  fi
+  printf '[]' >"$tmp/$1.results"
+  why=$(sed -n '1{s/^jq: error ([^)]*): //;p;}' "$tmp/$1.jqerr" 2>/dev/null | cut -c1-120)
+  set_status "$1" failed "unexpected answer${why:+ ($why)}"
+}
 finish() { # finish SOURCE: record ok (or dry-run) unless something already set the status
   [ -f "$tmp/$1.status" ] && return 0
   if [ "$dry_run" = 1 ]; then set_status "$1" dry-run; else set_status "$1" ok; fi
@@ -266,7 +279,8 @@ src_polyhaven() {
             (if $kind == "model" and (.polycount // 0) > $cap then "over the \($cap | commas)-triangle cap per mesh: decimate or split it in Blender (blender-to-roblox)" else empty end),
             (if $kind == "hdri" then "Roblox has no HDRI skies: a Sky takes six cube-face images" else empty end)
           ]
-        }]' "$assets" >"$tmp/polyhaven.results" || set_status polyhaven failed "unexpected answer"
+        }]' "$assets" >"$tmp/polyhaven.parsed" 2>"$tmp/polyhaven.jqerr" || :
+  accept polyhaven
   finish polyhaven
 }
 
@@ -300,7 +314,8 @@ src_ambientcg() {
             (if $kind == "hdri" then "Roblox has no HDRI skies: a Sky takes six cube-face images" else empty end),
             (if $dt == "Substance" then "a Substance (.sbsar) file: needs Substance tools to make maps" else empty end)
           ]
-        }]' "$BODY" >"$tmp/ambientcg.results" || set_status ambientcg failed "unexpected answer"
+        }]' "$BODY" >"$tmp/ambientcg.parsed" 2>"$tmp/ambientcg.jqerr" || :
+  accept ambientcg
   finish ambientcg
 }
 
@@ -328,15 +343,16 @@ src_sketchfab() {
     | reduce .[] as $r ([]; if any(.[]; .uid == $r.uid) then . else . + [$r] end) | .[:$n]
     | map({
         source: "sketchfab", id: .uid, name: (.name // .uid | clean), type: "model",
-        license: (.license.label | norm_license), licenseLabel: (.license.label // "unknown"),
-        author: (.user.username // "unknown"),
+        license: (.license.label? // .license | norm_license), licenseLabel: (.license.label? // .license // "unknown" | tostring),
+        author: (.user.username? // "unknown" | tostring),
         facts: ("\(.faceCount // 0 | commas) faces"
           + ([.archives[]? | .textureMaxResolution? | numbers] | max | if . then ", textures \(.) px" else "" end)),
-        page: (.viewerUrl // ("https://sketchfab.com/3d-models/" + .uid)),
+        page: ("https://sketchfab.com/3d-models/" + .uid), # redirects to the titled page
         download: null,
         get: "log in to Sketchfab, then Download 3D Model on the page (glTF or FBX)",
         warnings: []
-      })' $files >"$tmp/sketchfab.results" || set_status sketchfab failed "unexpected answer"
+      })' $files >"$tmp/sketchfab.parsed" 2>"$tmp/sketchfab.jqerr" || :
+  accept sketchfab
   finish sketchfab
 }
 
@@ -410,7 +426,8 @@ src_roblox() {
               (if .asset.hasScripts then "contains scripts: scan it before use (scan-model.sh, or script_grep after inserting)" else empty end),
               (if .creator.isVerifiedCreator != true then "creator is not verified" else empty end)
             ]
-          })' $files >"$tmp/roblox.results" || set_status roblox failed "unexpected answer"
+          })' $files >"$tmp/roblox.parsed" 2>"$tmp/roblox.jqerr" || :
+  accept roblox
   # Count the paid items that were left out.
   # shellcheck disable=SC2086
   n=$(jq -s '[.[] | .data[]? | select(type == "object") | select(((.fiatProduct | not) or .fiatProduct.isFree == true) and ((.product.price // 0) == 0) | not)] | length' $files 2>/dev/null || echo 0)
@@ -448,7 +465,8 @@ src_freesound() {
         preview: (.previews["preview-hq-mp3"]? // null),
         get: "download the original on the page (free Freesound account; the API needs OAuth2 for originals)",
         warnings: []
-      })' "$BODY" >"$tmp/freesound.results" || set_status freesound failed "unexpected answer"
+      })' "$BODY" >"$tmp/freesound.parsed" 2>"$tmp/freesound.jqerr" || :
+  accept freesound
   finish freesound
 }
 
@@ -491,7 +509,8 @@ src_pixabay() {
         download: null,
         get: "download from the page (the API image links expire after 24 hours)",
         warnings: [ (if $vector then "a vector (SVG/AI): rasterise it to PNG for Roblox" else empty end) ]
-      })' "$BODY" >"$tmp/pixabay.results" || set_status pixabay failed "unexpected answer"
+      })' "$BODY" >"$tmp/pixabay.parsed" 2>"$tmp/pixabay.jqerr" || :
+  accept pixabay
   finish pixabay
 }
 
@@ -523,7 +542,8 @@ src_polypizza() {
             download: (pick($m; ["Download", "download"])),
             get: "download the model file (GLB) from the page or the download link",
             warnings: [ (if ($tris | type) == "number" and $tris > $cap then "over the \($cap | commas)-triangle cap per mesh" else empty end) ]
-          })' "$BODY" >"$tmp/polypizza.results" || set_status polypizza failed "unexpected answer"
+          })' "$BODY" >"$tmp/polypizza.parsed" 2>"$tmp/polypizza.jqerr" || :
+  accept polypizza
   finish polypizza
 }
 
@@ -632,7 +652,10 @@ printf '[]' >"$tmp/all.sources"
 for s in $active; do
   [ -f "$tmp/$s.status" ] || set_status "$s" failed "the search stopped unexpectedly"
   IFS=$'\t' read -r state detail <"$tmp/$s.status" || true
-  [ -f "$tmp/$s.results" ] || printf '[]' >"$tmp/$s.results"
+  if ! jq -e 'type == "array"' "$tmp/$s.results" >/dev/null 2>&1; then
+    printf '[]' >"$tmp/$s.results"
+    if [ "$state" = ok ]; then state=failed detail="unexpected answer"; fi
+  fi
   case $state in
     ok) answered=$((answered + 1)) ;;
     failed) rdk_warn "$s: $detail" ;;

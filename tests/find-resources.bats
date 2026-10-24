@@ -16,11 +16,12 @@ setup() {
   FETCH="$FIND_SCRIPTS/fetch.sh"
   CREDIT="$FIND_SCRIPTS/credit.sh"
   SCAN="$FIND_SCRIPTS/scan-model.sh"
-  unset FREESOUND_API_KEY PIXABAY_API_KEY POLY_PIZZA_API_KEY CURL_FAIL CURL_TIMEOUT CURL_BADJSON RDK_LUNE_BIN
+  unset FREESOUND_API_KEY PIXABAY_API_KEY POLY_PIZZA_API_KEY CURL_FAIL CURL_TIMEOUT CURL_BADJSON CURL_SWAP RDK_LUNE_BIN
   mkdir -p "$FAKE/routes"
   # The fake logs its argv (calls.log), each URL (urls.log), each config file's mode and contents,
   # and any API key in its environment (leaks.log). It answers by URL from the fixtures; CURL_FAIL,
-  # CURL_TIMEOUT and CURL_BADJSON (space-separated URL parts) make matching requests fail.
+  # CURL_TIMEOUT and CURL_BADJSON (space-separated URL parts) make matching requests fail, and
+  # CURL_SWAP (part=file pairs) answers with another file.
   cat >"$FAKE/bin/curl" <<EOF
 #!/usr/bin/env bash
 dir="$FAKE" fix="$FIX"
@@ -51,6 +52,8 @@ echo "$url" >>"$dir/urls.log"
 for p in ${CURL_TIMEOUT:-}; do case $url in *"$p"*) echo "curl: (28) Operation timed out" >&2; printf 000; exit 28 ;; esac; done
 for p in ${CURL_FAIL:-}; do case $url in *"$p"*) printf 'unavailable' >"$out"; printf 503; exit 0 ;; esac; done
 for p in ${CURL_BADJSON:-}; do case $url in *"$p"*) printf '<html>' >"$out"; printf 200; exit 0 ;; esac; done
+# CURL_SWAP: space-separated URL-part=file pairs that answer with that file instead.
+for p in ${CURL_SWAP:-}; do case $url in *"${p%%=*}"*) cp "${p#*=}" "$out"; printf 200; exit 0 ;; esac; done
 f=''
 case $url in
   *api.polyhaven.com/search*t=models*) f=polyhaven-search-models.json ;;
@@ -237,6 +240,29 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   [[ "$output" == *"no source answered"* ]]
   [[ "$output" == *"Browse by hand"*"https://kenney.nl/assets/category:3D"* ]]
   [[ "$output" == *"Fab (free Megascans)"*"Fab Standard License (not CC)"* ]]
+}
+
+@test "search: an answer in an unexpected shape fails that source cleanly, and the rest still report" {
+  jq '[.[]]' "$FIX/polyhaven-assets-textures.json" >"$FAKE/routes/assets-array.json" # an array, not an object
+  CURL_SWAP="api.polyhaven.com/assets=$FAKE/routes/assets-array.json" run --separate-stderr bash "$SEARCH" "brick wall" --type texture --json
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"warning: polyhaven: unexpected answer"* ]]
+  [[ "$stderr" != *"jq: error"* ]]
+  [ "$(jq -r '.sources[] | select(.name == "polyhaven") | "\(.status) \(.results)"' <<<"$output")" = "failed 0" ]
+  [ "$(jq -r '[.sources[] | select(.status == "ok") | .name] | sort | join(",")' <<<"$output")" = ambientcg,roblox ]
+  [ "$(jq -c .credits <<<"$output")" = "[]" ]
+}
+
+@test "search: a Sketchfab license given as a string is still read" {
+  jq '.results[0].license = "cc0" | .results[1].user = "someone"' "$FIX/sketchfab-cc0.json" >"$FAKE/routes/sk.json"
+  CURL_SWAP="api.sketchfab.com=$FAKE/routes/sk.json" run --separate-stderr bash "$SEARCH" tree --type model --source sketchfab --license cc0 --json
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  [ "$(jq -r '.sources[0].status' <<<"$output")" = ok ]
+  [ "$(jq -r '.results[0] | "\(.license) \(.licenseLabel)"' <<<"$output")" = "CC0 cc0" ]
+  [ "$(jq -r '.results[1].author' <<<"$output")" = unknown ]
+  # Page links use the bare uid (Sketchfab redirects it to the titled page), not viewerUrl's "none-" slug.
+  [ "$(jq -r '.results[0].page' <<<"$output")" = "https://sketchfab.com/3d-models/218caec043db49d4b41855ab7e92765d" ]
 }
 
 @test "search: Poly Haven's search failing falls back to matching names and tags locally" {
