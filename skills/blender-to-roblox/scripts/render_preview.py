@@ -4,8 +4,10 @@
 
 Uses the Workbench engine (fast, no lighting setup needed) and a temporary camera that frames the
 objects from the front-right and above; --scene-camera uses the scene's camera instead. Hidden in
-the render: every mesh not being previewed. Everything it changes (camera, engine, resolution,
-visibility) is restored or removed afterwards, so saving the file later saves nothing from this.
+the render: every mesh not being previewed. The temporary camera is removed and the scene camera,
+engine, resolution, output path, file format and visibility are set back afterwards; other output
+settings (such as colour depth) are left as Blender's render leaves them. A missing .png extension
+is added to --out.
 In a live Blender the Blender MCP server's render_thumbnail_to_path does a similar job.
 Exit codes: 0 rendered, 1 render failed, 2 usage error.
 """
@@ -42,6 +44,8 @@ def render(out, names=None, scope=None, size=512, scene_camera=False):
     objects, chosen = check_mesh.resolve_objects(names, scope)
     scene = bpy.context.scene
     out = os.path.abspath(out)
+    if not out.lower().endswith(".png"):
+        out += ".png"  # Blender adds the extension itself; keep the path we report and check the same
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if scene_camera and scene.camera is None:
         raise check_mesh.UsageError("the scene has no camera (drop --scene-camera to frame the objects)")
@@ -91,7 +95,7 @@ def main(argv=None):
         prog="render_preview.py",
         description="Render a PNG preview of mesh objects with the Workbench engine (run inside Blender, "
                     "for example with run_blender.sh). Exit 0 rendered, 1 failed, 2 usage error.")
-    parser.add_argument("--out", required=True, metavar="PNG", help="image file to write")
+    parser.add_argument("--out", required=True, metavar="PNG", help="image file to write (.png is added when missing)")
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--objects", metavar="A,B", help="these mesh objects (default: the selection, else all meshes)")
     scope.add_argument("--selected", action="store_true", help="only the selected mesh objects")

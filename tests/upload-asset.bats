@@ -220,3 +220,28 @@ calls() { if [ -f "$FAKE/calls.log" ]; then wc -l <"$FAKE/calls.log" | tr -d ' '
   [ "$status" -eq 1 ]
   [[ "$output" == *"operation op-77 is still running after 0s"* ]]
 }
+
+@test "no child process sees ROBLOX_API_KEY, not even before the upload starts" {
+  # jq runs before curl (request JSON, validation); wrap it to record the key in its environment.
+  rm "$FAKE/bin/jq"
+  printf '#!/usr/bin/env bash\n[ -z "${ROBLOX_API_KEY:-}" ] || echo "jq saw the key" >>"%s/leaks.log"\nexec "%s" "$@"\n' \
+    "$FAKE" "$REAL_JQ" >"$FAKE/bin/jq"
+  chmod +x "$FAKE/bin/jq"
+  ROBLOX_API_KEY=probe jq -n 1 >/dev/null # the wrapper itself works
+  [ -s "$FAKE/leaks.log" ]
+  rm "$FAKE/leaks.log"
+  respond 1 200 "$(done_ok 3)"
+  run bash "$UPLOAD" "$FAKE/assets/car.fbx" --name "Car body"
+  [ "$status" -eq 0 ]
+  [ -s "$FAKE/auth.log" ]       # the key still reached curl, through its config file
+  [ ! -e "$FAKE/leaks.log" ]
+}
+
+@test "any 2xx answer counts as success" {
+  respond 1 201 "$pending"
+  respond 2 202 "$(done_ok 77)"
+  run bash "$UPLOAD" "$FAKE/assets/car.fbx" --name "Car body"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"asset id 77"* ]]
+  [ "$(calls)" -eq 2 ]
+}

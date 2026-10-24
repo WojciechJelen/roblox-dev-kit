@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Upload a model, image or sound with the Roblox Open Cloud Assets API, wait for the upload
 # operation to finish, and print the asset id and how to insert it.
-# The API key comes from ROBLOX_API_KEY. It is never printed and never put on a command line:
+# The API key comes from ROBLOX_API_KEY. It is never printed, never put on a command line and
+# never passed to child processes: the script moves it into an unexported variable first, and
 # curl reads it from a private, temporary config file. RDK_UPLOAD_MAX_DELAY caps every wait in
 # seconds (default 30; the tests use 0).
 # shellcheck disable=SC2016  # jq programs use $names literally
 set -euo pipefail
+api_key=${ROBLOX_API_KEY:-}
+unset ROBLOX_API_KEY
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib/common.sh
@@ -112,7 +115,7 @@ bytes=$(wc -c <"$file" | tr -d ' ')
 
 creator_type=${ROBLOX_CREATOR_TYPE:-} creator_id=${ROBLOX_CREATOR_ID:-}
 problems=''
-[ -n "${ROBLOX_API_KEY:-}" ] || problems="ROBLOX_API_KEY is not set"
+[ -n "$api_key" ] || problems="ROBLOX_API_KEY is not set"
 case $creator_type in
   User) creator_key=userId ;;
   Group) creator_key=groupId ;;
@@ -150,11 +153,11 @@ fi
 
 tmp=$(umask 077 && mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-key=${ROBLOX_API_KEY//\\/\\\\}
+key=${api_key//\\/\\\\}
 key=${key//\"/\\\"}
-# printf is a shell builtin, so the key never appears in a process list; curl does not inherit it either.
+# printf is a shell builtin, so the key never appears in a process list.
 (umask 077 && printf 'header = "x-api-key: %s"\n' "$key" >"$tmp/auth.conf")
-unset key ROBLOX_API_KEY
+unset key api_key
 printf '%s\n' "$request" >"$tmp/request.json"
 
 # pause SECONDS: sleep, capped at MAX_DELAY.
@@ -187,6 +190,8 @@ http() {
   done
 }
 
+is_2xx() { case $1 in 2??) return 0 ;; esac; return 1; }
+
 # api_error WHAT: explain a failed request and exit 1.
 api_error() {
   local msg=''
@@ -204,7 +209,7 @@ api_error() {
 
 rdk_info "uploading $file as $type \"$name\" ($ctype, $bytes bytes)"
 http "$API/assets" -F "request=<$tmp/request.json" -F "fileContent=@\"$file\";type=$ctype"
-[ "$STATUS" = 200 ] || api_error "upload failed"
+is_2xx "$STATUS" || api_error "upload failed"
 operation=$(jq -r '.operationId // ((.path // "") | sub("^operations/"; ""))' "$tmp/body")
 [ -n "$operation" ] || rdk_die "the upload response has no operation id: $(head -c 300 "$tmp/body")"
 cp "$tmp/body" "$tmp/operation.json"
@@ -217,7 +222,7 @@ while [ "$(jq -r '.done // false' "$tmp/operation.json")" != true ]; do
   fi
   pause $delay
   http "$API/operations/$operation"
-  [ "$STATUS" = 200 ] || api_error "checking operation $operation failed"
+  is_2xx "$STATUS" || api_error "checking operation $operation failed"
   cp "$tmp/body" "$tmp/operation.json"
   polls=$((polls + 1))
   if [ $delay -eq 0 ]; then delay=1; else delay=$((delay * 2)); fi

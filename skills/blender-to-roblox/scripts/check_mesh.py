@@ -15,9 +15,13 @@ Read-only: it never changes the scene. Exit codes: 0 no violations (warnings all
 1 violations, 2 usage error. With --json the report is printed as one line that starts with
 "{" (Blender prints its own status lines around it); --report FILE also writes it to a file.
 
-Limits and their sources are in references/export-rules.md:
-20,000 triangles per mesh (https://create.roblox.com/docs/art/modeling/specifications) and
-1024x1024 texture maps (https://create.roblox.com/docs/art/modeling/texture-specifications).
+Limits and their sources are in references/export-rules.md: 20,000 triangles per mesh
+(https://create.roblox.com/docs/art/modeling/specifications) and textures up to 4096x4096, with
+1024x1024 the largest size documented for PBR maps
+(https://create.roblox.com/docs/art/modeling/texture-specifications). Larger than 4096 (or
+--max-texture) is a violation; larger than 1024 (--texture-budget) a warning. Only images connected
+to a material's output count, because the FBX exporter writes no others. Only MESH objects are
+checked; curves, text and metaballs are reported so they can be converted first.
 Sizes are in studs: the kit exports FBX with "FBX Unit Scale" and a global scale of 1.0, which
 Roblox documents as importing at the same scale, so 1 Blender unit = 1 stud (times --scale).
 """
@@ -31,8 +35,11 @@ import sys
 from array import array
 
 DEFAULT_MAX_TRIS = 20000
-DEFAULT_MAX_TEXTURE = 1024
+DEFAULT_MAX_TEXTURE = 4096     # the largest texture Roblox supports
+DEFAULT_TEXTURE_BUDGET = 1024  # the largest size Roblox documents for PBR maps
 EPSILON = 1e-4
+# Object types that look like geometry in Blender but are not exported as meshes until converted.
+CONVERTIBLE_TYPES = ("CURVE", "SURFACE", "FONT", "META")
 
 
 class UsageError(Exception):
@@ -67,11 +74,12 @@ def resolve_objects(names=None, scope=None):
             if obj is None:
                 raise UsageError("no object named %r in scene %r" % (name, scene.name))
             if obj.type != "MESH":
-                raise UsageError("%r is a %s, not a mesh" % (name, obj.type.lower()))
+                raise UsageError("%r is a %s, not a mesh; convert it first (Object > Convert > Mesh)" % (
+                    name, obj.type.lower()))
             objects.append(obj)
         return objects, "objects"
     meshes = [o for o in scene.objects if o.type == "MESH"]
-    chosen = [] if scope == "all" else [o for o in meshes if o.select_get()]
+    chosen = [] if scope == "all" else [o for o in meshes if _selected(o)]
     if scope == "selected" and not chosen:
         raise UsageError("no mesh objects are selected")
     if chosen:
@@ -79,6 +87,13 @@ def resolve_objects(names=None, scope=None):
     if not meshes:
         raise UsageError("scene %r has no mesh objects" % scene.name)
     return meshes, "all"
+
+
+def _selected(obj):
+    """select_get() raises for objects outside the view layer (in an excluded collection)."""
+    import bpy
+
+    return obj.name in bpy.context.view_layer.objects and obj.select_get()
 
 
 def _image_nodes(tree, seen=None):
@@ -92,6 +107,24 @@ def _image_nodes(tree, seen=None):
             yield node
         elif node.type == "GROUP":
             yield from _image_nodes(node.node_tree, seen)
+
+
+def _feeding_output(tree):
+    """Pointers of the nodes that feed the material output (the active one, else every output),
+    following links backwards and into node groups. Unconnected nodes are not exported."""
+    outputs = [n for n in tree.nodes if n.type == "OUTPUT_MATERIAL"]
+    stack = [n for n in outputs if getattr(n, "is_active_output", False)] or outputs
+    found = set()
+    while stack:
+        node = stack.pop()
+        if node.as_pointer() in found:
+            continue
+        found.add(node.as_pointer())
+        for socket in node.inputs:
+            stack.extend(link.from_node for link in socket.links if not link.is_muted)
+        if node.type == "GROUP" and node.node_tree is not None:
+            stack.extend(n for n in node.node_tree.nodes if n.type == "GROUP_OUTPUT")
+    return found
 
 
 def _geometry(mesh):
@@ -125,6 +158,9 @@ def _geometry(mesh):
 
 def inspect_object(obj, depsgraph, use_modifiers=True, scale=1.0):
     """Facts about one mesh object, as a JSON-serialisable dict (without verdicts)."""
+    import bpy
+
+    in_view_layer = obj.name in bpy.context.view_layer.objects
     if use_modifiers:
         evaluated = obj.evaluated_get(depsgraph)
         mesh = evaluated.to_mesh()
@@ -154,12 +190,19 @@ def inspect_object(obj, depsgraph, use_modifiers=True, scale=1.0):
         if mat is None or mat.name in materials:
             continue
         materials.append(mat.name)
+        if mat.node_tree is None:
+            continue
+        feeding = _feeding_output(mat.node_tree)
         for node in _image_nodes(mat.node_tree):
             image = node.image
-            if any(t["image"] == image.name for t in textures):
+            linked = node.as_pointer() in feeding
+            known = next((t for t in textures if t["image"] == image.name), None)
+            if known is not None:
+                known["linked"] = known["linked"] or linked
                 continue
             width, height = image.size
-            textures.append({"image": image.name, "width": width, "height": height, "material": mat.name})
+            textures.append({"image": image.name, "width": width, "height": height, "material": mat.name,
+                             "linked": linked})
 
     return dict(
         geo,
@@ -173,10 +216,14 @@ def inspect_object(obj, depsgraph, use_modifiers=True, scale=1.0):
         materials=materials,
         textures=textures,
         modifiers=[m.name for m in obj.modifiers],
+        in_view_layer=in_view_layer,
+        hidden=bool(in_view_layer and obj.hide_get()),
+        hidden_viewport=obj.hide_viewport,
+        unselectable=obj.hide_select,
     )
 
 
-def judge(info, max_tris, max_texture, use_modifiers):
+def judge(info, max_tris, max_texture, texture_budget, use_modifiers):
     """(violations, warnings) for one inspected object: lists of {code, message}."""
     violations, warnings = [], []
 
@@ -186,11 +233,19 @@ def judge(info, max_tris, max_texture, use_modifiers):
     if info["triangles"] > max_tris:
         add(violations, "tris", "%d triangles, over the %d limit" % (info["triangles"], max_tris))
     for tex in info["textures"]:
-        if tex["width"] == 0 or tex["height"] == 0:
+        side = max(tex["width"], tex["height"])
+        size = "%dx%d" % (tex["width"], tex["height"])
+        if not tex["linked"]:
+            if side > texture_budget:
+                add(warnings, "unlinked-texture", "image %r (%s) is not connected to the material output, "
+                    "so it is not exported" % (tex["image"], size))
+        elif side == 0:
             add(warnings, "missing-image", "image %r has no pixels (missing file?)" % tex["image"])
-        elif max(tex["width"], tex["height"]) > max_texture:
-            add(violations, "texture", "image %r is %dx%d, over %dx%d" % (
-                tex["image"], tex["width"], tex["height"], max_texture, max_texture))
+        elif side > max_texture:
+            add(violations, "texture", "image %r is %s, over the %d px limit" % (tex["image"], size, max_texture))
+        elif side > texture_budget:
+            add(warnings, "texture-budget", "image %r is %s, over the %d px budget (the largest size Roblox "
+                "documents for PBR maps)" % (tex["image"], size, texture_budget))
     if info["faces"] == 0:
         add(warnings, "no-faces", "has no faces, so nothing would import")
     if info["ngons"]:
@@ -210,18 +265,28 @@ def judge(info, max_tris, max_texture, use_modifiers):
         add(warnings, "negative-scale", "negative scale (mirrored); normals may import flipped")
     if info["faces"] and min(info["dimensions_studs"]) < EPSILON:
         add(warnings, "flat", "zero thickness; Roblox meshes need some volume")
+    if not info["in_view_layer"]:
+        add(warnings, "excluded", "not in the view layer (its collection is excluded), so it cannot be "
+            "exported; tick the collection in the Outliner first")
+    elif info["hidden"] or info["hidden_viewport"]:
+        add(warnings, "hidden", "hidden; the FBX exporter skips hidden objects (export_fbx.py shows it "
+            "while it exports)")
+    if info["unselectable"]:
+        add(warnings, "unselectable", "not selectable; the FBX exporter skips it (export_fbx.py unlocks it "
+            "while it exports)")
     if info["modifiers"] and not use_modifiers:
         add(warnings, "modifiers", "%d modifier(s) not included (export with --apply-modifiers)" % len(info["modifiers"]))
     return violations, warnings
 
 
 def check(names=None, scope=None, max_tris=DEFAULT_MAX_TRIS, max_texture=DEFAULT_MAX_TEXTURE,
-          use_modifiers=True, scale=1.0, require_names=None, require_count=1):
+          texture_budget=DEFAULT_TEXTURE_BUDGET, use_modifiers=True, scale=1.0, require_names=None,
+          require_count=1):
     """Check mesh objects and return the report dict. Raises UsageError for bad input."""
     import bpy
 
-    if max_tris < 1 or max_texture < 1 or scale <= 0 or require_count < 1:
-        raise UsageError("--max-tris, --max-texture, --scale and --require-count must be positive")
+    if max_tris < 1 or max_texture < 1 or texture_budget < 1 or scale <= 0 or require_count < 1:
+        raise UsageError("--max-tris, --max-texture, --texture-budget, --scale and --require-count must be positive")
     pattern = None
     if require_names:
         try:
@@ -234,12 +299,22 @@ def check(names=None, scope=None, max_tris=DEFAULT_MAX_TRIS, max_texture=DEFAULT
     infos, violations, warnings = [], [], []
     for obj in objects:
         info = inspect_object(obj, depsgraph, use_modifiers, scale)
-        bad, meh = judge(info, max_tris, max_texture, use_modifiers)
+        bad, meh = judge(info, max_tris, max_texture, texture_budget, use_modifiers)
         info["violations"] = [v["message"] for v in bad]
         info["warnings"] = [w["message"] for w in meh]
         infos.append(info)
         violations.extend(bad)
         warnings.extend(meh)
+
+    if not names:
+        # Curves, text and metaballs in the same scope are skipped; say so, they may be part of the model.
+        pool = [o for o in bpy.context.scene.objects if o.type in CONVERTIBLE_TYPES]
+        if scope == "selection":
+            pool = [o for o in pool if _selected(o)]
+        for obj in pool:
+            warnings.append({"object": obj.name, "code": "not-mesh", "message": "%s is a %s, not a mesh, so it "
+                             "is not checked or exported; convert it (Object > Convert > Mesh)" % (
+                                 obj.name, obj.type.lower())})
 
     if pattern is not None:
         matched = [i["name"] for i in infos if pattern.search(i["name"])]
@@ -252,7 +327,7 @@ def check(names=None, scope=None, max_tris=DEFAULT_MAX_TRIS, max_texture=DEFAULT
         "blender": bpy.app.version_string,
         "blend_file": bpy.data.filepath,
         "scope": scope,
-        "limits": {"max_tris": max_tris, "max_texture": max_texture},
+        "limits": {"max_tris": max_tris, "max_texture": max_texture, "texture_budget": texture_budget},
         "modifiers": use_modifiers,
         "scale": scale,
         "objects": infos,
@@ -272,9 +347,10 @@ def format_table(report):
     """The report as a table for people."""
     lines = []
     limits = report["limits"]
-    lines.append("check_mesh: %d object(s) (%s) in %s; limits: %d triangles per mesh, %d px textures" % (
-        report["summary"]["objects"], report["scope"], report["blend_file"] or "unsaved scene",
-        limits["max_tris"], limits["max_texture"]))
+    lines.append("check_mesh: %d object(s) (%s) in %s; limits: %d triangles per mesh, %d px textures "
+                 "(%d px budget)" % (report["summary"]["objects"], report["scope"],
+                                     report["blend_file"] or "unsaved scene", limits["max_tris"],
+                                     limits["max_texture"], limits["texture_budget"]))
     width = max([len("object")] + [len(o["name"]) for o in report["objects"]])
     lines.append("")
     lines.append("    %-*s  %7s  %7s  %-24s  %3s  %s" % (width, "object", "tris", "verts", "size in studs (x y z)", "mat", "uv"))
@@ -288,9 +364,13 @@ def format_table(report):
             lines.append("    %*s  violation: %s" % (width, "", message))
         for message in o["warnings"]:
             lines.append("    %*s  warning: %s" % (width, "", message))
+    checked = {o["name"] for o in report["objects"]}
     for v in report["violations"]:
-        if v["object"] is None:
+        if v["object"] not in checked:
             lines.append("x   violation: %s" % v["message"])
+    for w in report["warnings"]:
+        if w["object"] not in checked:
+            lines.append("!   warning: %s" % w["message"])
     s = report["summary"]
     lines.append("")
     lines.append("%d triangles in total; %d violation(s), %d warning(s)" % (s["triangles"], s["violations"], s["warnings"]))
@@ -319,7 +399,11 @@ def add_check_arguments(parser):
     parser.add_argument("--max-tris", type=int, default=DEFAULT_MAX_TRIS, metavar="N",
                         help="triangle limit per mesh (default %(default)s, Roblox's documented limit)")
     parser.add_argument("--max-texture", type=int, default=DEFAULT_MAX_TEXTURE, metavar="PX",
-                        help="largest allowed texture side in pixels (default %(default)s)")
+                        help="a connected texture with a longer side is a violation (default %(default)s, "
+                             "the largest Roblox supports)")
+    parser.add_argument("--texture-budget", type=int, default=DEFAULT_TEXTURE_BUDGET, metavar="PX",
+                        help="a connected texture with a longer side gets a warning (default %(default)s, "
+                             "the largest size Roblox documents for PBR maps)")
     parser.add_argument("--scale", type=float, default=1.0,
                         help="studs per Blender unit, the FBX export scale (default %(default)s)")
     parser.add_argument("--require-names", metavar="REGEX",
@@ -333,7 +417,8 @@ def run_check(args, use_modifiers):
     """check() with parsed options (shared with export_fbx.py)."""
     scope = "selected" if args.selected else ("all" if args.all else None)
     return check(names=split_names(args.objects), scope=scope, max_tris=args.max_tris,
-                 max_texture=args.max_texture, use_modifiers=use_modifiers, scale=args.scale,
+                 max_texture=args.max_texture, texture_budget=args.texture_budget,
+                 use_modifiers=use_modifiers, scale=args.scale,
                  require_names=args.require_names, require_count=args.require_count)
 
 

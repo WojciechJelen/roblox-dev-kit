@@ -13,9 +13,11 @@ or from code already running in Blender (execute_blender_code):
     result = export_fbx.export("/abs/path/car.fbx", names=["Body"])
 
 The objects are checked first with check_mesh.py's rules; violations stop the export unless
---force. Nothing in the scene changes: the selection is restored afterwards and modifiers are
-only applied to the exported copy. Exit codes: 0 exported, 1 violations or export failure,
-2 usage error.
+--force. Only MESH objects are exported (convert curves, text and metaballs first). Nothing in the
+scene changes: hidden or unselectable objects are shown and unlocked only while the exporter runs
+(it skips them otherwise), the selection is restored afterwards, and modifiers are only applied to
+the exported copy. Objects in a collection excluded from the view layer cannot be exported (exit 2).
+Exit codes: 0 exported, 1 violations or export failure, 2 usage error.
 
 Export settings (https://create.roblox.com/docs/art/modeling/export-requirements and
 https://create.roblox.com/docs/art/blender, see references/export-rules.md): Path Mode Copy with
@@ -80,47 +82,84 @@ def plan_outputs(out, objects, per_object):
 
 
 def _armatures_for(objects):
+    import bpy
+
     found = []
     for obj in objects:
         candidates = [obj.parent] + [m.object for m in obj.modifiers if m.type == "ARMATURE"]
         for arm in candidates:
             if arm is not None and arm.type == "ARMATURE" and arm not in found:
                 found.append(arm)
-    return found
+    return [a for a in found if a.name in bpy.context.view_layer.objects]
+
+
+def _require_view_layer(objects):
+    import bpy
+
+    outside = [o.name for o in objects if o.name not in bpy.context.view_layer.objects]
+    if outside:
+        raise check_mesh.UsageError(
+            "%s %s not in the view layer (an excluded collection); tick the collection in the Outliner "
+            "and run again" % (", ".join(outside), "is" if len(outside) == 1 else "are"))
 
 
 @contextlib.contextmanager
 def _selection(objects):
-    """Select exactly OBJECTS (active: the first), and restore the previous selection after."""
+    """Select exactly OBJECTS (active: the first) for the FBX exporter, which exports
+    context.selected_objects: hidden or unselectable objects are never in that list, so they are
+    shown and unlocked for the duration. Visibility, selectability and the previous selection
+    are restored afterwards."""
     import bpy
 
     view_layer = bpy.context.view_layer
     before = [o for o in view_layer.objects if o.select_get()]
     active = view_layer.objects.active
+    flags = [(o, o.hide_get(), o.hide_viewport, o.hide_select) for o in objects]
     try:
         for obj in before:
             obj.select_set(False)
-        for obj in objects:
+        for obj, hidden, hidden_viewport, unselectable in flags:
+            # Only touch flags that are set, so a visible scene is not marked as modified.
+            if hidden_viewport:
+                obj.hide_viewport = False
+            if hidden:
+                obj.hide_set(False)
+            if unselectable:
+                obj.hide_select = False
             obj.select_set(True)
         view_layer.objects.active = objects[0]
+        selected = set(o.name for o in bpy.context.selected_objects)
+        missing = [o.name for o in objects if o.name not in selected]
+        if missing:
+            raise check_mesh.UsageError(
+                "%s could not be selected for the export (in a hidden or unselectable collection?); "
+                "show the collection and run again" % ", ".join(missing))
         yield
     finally:
         for obj in view_layer.objects:
             obj.select_set(obj in before)
+        for obj, hidden, hidden_viewport, unselectable in flags:
+            if hidden_viewport:
+                obj.hide_viewport = True
+            if hidden:
+                obj.hide_set(True)
+            if unselectable:
+                obj.hide_select = True
         view_layer.objects.active = active
 
 
 def export(out, names=None, scope=None, apply_modifiers=False, triangulate=False, per_object=False,
            with_armature=False, scale=1.0, max_tris=check_mesh.DEFAULT_MAX_TRIS,
-           max_texture=check_mesh.DEFAULT_MAX_TEXTURE, require_names=None, require_count=1,
-           force=False, dry_run=False):
+           max_texture=check_mesh.DEFAULT_MAX_TEXTURE, texture_budget=check_mesh.DEFAULT_TEXTURE_BUDGET,
+           require_names=None, require_count=1, force=False, dry_run=False):
     """Check, then export. Returns a JSON-serialisable dict; raises check_mesh.UsageError."""
     import bpy
 
     report = check_mesh.check(names=names, scope=scope, max_tris=max_tris, max_texture=max_texture,
-                              use_modifiers=apply_modifiers, scale=scale, require_names=require_names,
-                              require_count=require_count)
+                              texture_budget=texture_budget, use_modifiers=apply_modifiers, scale=scale,
+                              require_names=require_names, require_count=require_count)
     objects, _ = check_mesh.resolve_objects([o["name"] for o in report["objects"]])
+    _require_view_layer(objects)
     plan = plan_outputs(out, objects, per_object)
     settings = fbx_settings(apply_modifiers, triangulate, with_armature, scale)
     result = {
@@ -204,6 +243,7 @@ def main(argv=None):
                         apply_modifiers=args.apply_modifiers, triangulate=args.triangulate,
                         per_object=args.per_object, with_armature=args.with_armature, scale=args.scale,
                         max_tris=args.max_tris, max_texture=args.max_texture,
+                        texture_budget=args.texture_budget,
                         require_names=args.require_names, require_count=args.require_count,
                         force=args.force, dry_run=args.dry_run)
     except check_mesh.UsageError as ex:

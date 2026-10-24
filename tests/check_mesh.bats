@@ -10,6 +10,8 @@ setup_file() {
   build_car heavy --heavy Wheel_FL
   build_car textured --texture 2048
   build_car rotated --rotated Body
+  build_car stray --texture 512 --stray-texture 4096
+  build_car odd --hidden Body --hidden-viewport Wheel_FL --unselectable Wheel_FR --excluded Wheel_RR --text
 }
 
 setup() {
@@ -65,17 +67,49 @@ check() {
   [ "$(jq -r '.warnings[] | select(.code == "modifiers") | .object' <<<"$(json_line)")" = Wheel_FL ]
 }
 
-@test "real Blender: --max-tris and --max-texture set the limits" {
+@test "real Blender: --max-tris and --max-texture set the limits; over the 1024 px budget is a warning" {
   require_real_blender
   check "$(car car)" --json --max-tris 100
   [ "$status" -eq 1 ]
   [ "$(jq -r '[.violations[] | .object] | join(",")' <<<"$(json_line)")" = "Wheel_FL,Wheel_FR,Wheel_RL,Wheel_RR" ]
+  # 2048 px: within Roblox's 4096 maximum, over the kit's 1024 px PBR budget.
   check "$(car textured)" --json --objects Body
-  [ "$status" -eq 1 ]
-  [ "$(jq -r '.objects[0].textures[0] | "\(.image) \(.width)x\(.height)"' <<<"$(json_line)")" = "BodyColor 2048x2048" ]
-  [ "$(jq -r '.violations[0].code' <<<"$(json_line)")" = texture ]
-  check "$(car textured)" --json --objects Body --max-texture 4096
   [ "$status" -eq 0 ]
+  [ "$(jq -c .limits <<<"$(json_line)")" = '{"max_tris":20000,"max_texture":4096,"texture_budget":1024}' ]
+  [ "$(jq -r '.objects[0].textures[0] | "\(.image) \(.width)x\(.height) \(.linked)"' <<<"$(json_line)")" = "BodyColor 2048x2048 true" ]
+  [ "$(jq -r '.warnings[0].code' <<<"$(json_line)")" = texture-budget ]
+  check "$(car textured)" --json --objects Body --max-texture 1024
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.violations[0].code' <<<"$(json_line)")" = texture ]
+  check "$(car textured)" --json --objects Body --texture-budget 2048
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.warnings | length' <<<"$(json_line)")" = 0 ]
+}
+
+@test "real Blender: an image connected to nothing is not exported, so it is only a warning" {
+  require_real_blender
+  check "$(car stray)" --json --objects Body --max-texture 1024
+  [ "$status" -eq 0 ]
+  report=$(json_line)
+  [ "$(jq -c '[.objects[0].textures[] | [.image, .width, .linked]]' <<<"$report")" = '[["BodyColor",512,true],["BakeTarget",4096,false]]' ]
+  [ "$(jq -r '.warnings[] | "\(.code): \(.message)"' <<<"$report")" = \
+    "unlinked-texture: image 'BakeTarget' (4096x4096) is not connected to the material output, so it is not exported" ]
+  # The same limit on a connected image is a violation (textured: a linked 2048 px image).
+  check "$(car textured)" --json --objects Body --max-texture 1024
+  [ "$status" -eq 1 ]
+}
+
+@test "real Blender: hidden, unselectable, excluded and non-mesh objects get warnings" {
+  require_real_blender
+  check "$(car odd)" --json
+  [ "$status" -eq 0 ]
+  report=$(json_line)
+  [ "$(jq -c '.objects[] | select(.name == "Body") | [.hidden, .hidden_viewport, .unselectable, .in_view_layer]' <<<"$report")" = '[true,false,false,true]' ]
+  [ "$(jq -c '[.warnings[] | select(.code != "ngons") | "\(.object)=\(.code)"]' <<<"$report")" = \
+    '["Body=hidden","Wheel_FL=hidden","Wheel_FR=unselectable","Wheel_RR=excluded","Logo=not-mesh"]' ]
+  check "$(car odd)" --objects Logo
+  [ "$status" -eq 2 ]
+  [[ "$stderr" == *"'Logo' is a font, not a mesh; convert it first"* ]]
 }
 
 @test "real Blender: --require-names with --require-count checks the wheel set" {
@@ -99,7 +133,7 @@ check() {
   require_real_blender
   check "$(car heavy)"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"limits: 20000 triangles per mesh, 1024 px textures"* ]]
+  [[ "$output" == *"limits: 20000 triangles per mesh, 4096 px textures (1024 px budget)"* ]]
   [[ "$output" == *"violation: 24576 triangles, over the 20000 limit"* ]]
   [[ "$output" == *"warning: 2 n-gon(s)"* ]]
   [[ "$output" == *"1 violation(s), 3 warning(s)"* ]]

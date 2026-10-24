@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # export_fbx.py and render_preview.py. Most tests need a real Blender (RDK_BLENDER_TESTS=1); they
-# build small car scenes on the fly with Blender's user folders in a temp dir.
+# build small car scenes on the fly with Blender's user folders in a temp dir. Every export is
+# checked by importing the FBX into an empty scene in a fresh Blender (fbx_contents).
 
 load helpers
 
@@ -8,6 +9,8 @@ setup_file() {
   real_blender_enabled || return 0
   build_car car
   build_car heavy --heavy Wheel_FL
+  build_car hidden --hidden Body --hidden-viewport Wheel_FL --unselectable Wheel_FR
+  build_car excluded --excluded Wheel_RR
 }
 
 setup() {
@@ -24,7 +27,7 @@ export_fbx() {
   run --separate-stderr bash "$RUN" --blend "$blend" export_fbx.py "$@"
 }
 
-is_fbx() { [ "$(head -c 18 "$1")" = "Kaydara FBX Binary" ] && [ "$(wc -c <"$1" | tr -d ' ')" -gt 1000 ]; }
+ALL_FACES='{"Body": 6, "Wheel_FL": 34, "Wheel_FR": 34, "Wheel_RL": 34, "Wheel_RR": 34}'
 
 @test "--help works without Blender" {
   run python3 "$BLENDER_SCRIPTS/export_fbx.py" --help
@@ -39,7 +42,7 @@ is_fbx() { [ "$(head -c 18 "$1")" = "Kaydara FBX Binary" ] && [ "$(wc -c <"$1" |
   require_real_blender
   export_fbx "$(car car)" --out "$OUT/car.fbx" --json
   [ "$status" -eq 0 ]
-  is_fbx "$OUT/car.fbx"
+  [ "$(fbx_contents "$OUT/car.fbx")" = "$ALL_FACES" ]
   result=$(json_line)
   [ "$(jq -r '.exported[0].objects | join(",")' <<<"$result")" = "Body,Wheel_FL,Wheel_FR,Wheel_RL,Wheel_RR" ]
   [ "$(jq -c '.settings | {apply_scale_options, global_scale, axis_forward, axis_up, path_mode, embed_textures, add_leaf_bones, bake_anim, object_types}' <<<"$result")" = \
@@ -72,7 +75,8 @@ print(found["UnitScaleFactor"], found["UpAxis"])' "$OUT/car.json"
   export_fbx "$(car heavy)" --out "$OUT/heavy.fbx" --apply-modifiers --force
   [ "$status" -eq 0 ]
   [[ "$output" == *"exporting despite 1 violation(s) (--force)"* ]]
-  is_fbx "$OUT/heavy.fbx"
+  # The subdivided wheel is written as checked: 24,576 triangles = 12,288 quads.
+  [ "$(fbx_contents "$OUT/heavy.fbx" | jq -c '{Body, Wheel_FL}')" = '{"Body":6,"Wheel_FL":12288}' ]
 }
 
 @test "real Blender: without --apply-modifiers the base mesh is checked and exported, with a warning" {
@@ -80,7 +84,7 @@ print(found["UnitScaleFactor"], found["UpAxis"])' "$OUT/car.json"
   export_fbx "$(car heavy)" --out "$OUT/base.fbx" --objects Wheel_FL
   [ "$status" -eq 0 ]
   [[ "$output" == *"warning: 1 modifier(s) not included (export with --apply-modifiers)"* ]]
-  is_fbx "$OUT/base.fbx"
+  [ "$(fbx_contents "$OUT/base.fbx")" = '{"Wheel_FL": 34}' ]
 }
 
 @test "real Blender: --per-object writes one FBX per wheel, named after the object" {
@@ -88,7 +92,46 @@ print(found["UnitScaleFactor"], found["UpAxis"])' "$OUT/car.json"
   export_fbx "$(car car)" --out "$OUT/wheels" --per-object --objects Wheel_FL,Wheel_FR,Wheel_RL,Wheel_RR --triangulate
   [ "$status" -eq 0 ]
   [ "$(cd "$OUT/wheels" && ls | tr '\n' ' ')" = "Wheel_FL.fbx Wheel_FR.fbx Wheel_RL.fbx Wheel_RR.fbx " ]
-  for f in "$OUT"/wheels/*.fbx; do is_fbx "$f"; done
+  for w in FL FR RL RR; do
+    [ "$(fbx_contents "$OUT/wheels/Wheel_$w.fbx")" = "{\"Wheel_$w\": 124}" ] # one wheel each, triangulated
+  done
+}
+
+@test "real Blender: hidden and unselectable objects are exported, and stay hidden in the scene" {
+  require_real_blender
+  export_fbx "$(car hidden)" --out "$OUT/hidden.fbx"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"warning: hidden; the FBX exporter skips hidden objects"* ]]
+  [[ "$output" == *"warning: not selectable; the FBX exporter skips it"* ]]
+  [ "$(fbx_contents "$OUT/hidden.fbx")" = "$ALL_FACES" ]
+  export_fbx "$(car hidden)" --out "$OUT/body.fbx" --objects Body
+  [ "$status" -eq 0 ]
+  [ "$(fbx_contents "$OUT/body.fbx")" = '{"Body": 6}' ]
+  # In a live session the flags are back afterwards.
+  run --separate-stderr "$REAL_BLENDER" --background --quiet "$(car hidden)" --python-exit-code 1 --python-expr '
+import json, sys
+import bpy
+scripts, out = sys.argv[sys.argv.index("--") + 1:]
+sys.path.insert(0, scripts)
+import export_fbx
+export_fbx.export(out, names=["Body", "Wheel_FL", "Wheel_FR"])
+o = bpy.data.objects
+print(json.dumps({"flags": [o["Body"].hide_get(), o["Wheel_FL"].hide_viewport, o["Wheel_FR"].hide_select],
+                  "selected": sorted(x.name for x in bpy.context.selected_objects)}))
+' -- "$BLENDER_SCRIPTS" "$OUT/live.fbx"
+  [ "$status" -eq 0 ]
+  [ "$(json_line)" = '{"flags": [true, true, true], "selected": []}' ]
+}
+
+@test "real Blender: objects outside the view layer are a usage error, not a crash" {
+  require_real_blender
+  export_fbx "$(car excluded)" --out "$OUT/car.fbx"
+  [ "$status" -eq 2 ]
+  [[ "$stderr" == *"Wheel_RR is not in the view layer (an excluded collection)"* ]]
+  [ ! -e "$OUT/car.fbx" ]
+  export_fbx "$(car excluded)" --out "$OUT/car.fbx" --objects Body,Wheel_FL
+  [ "$status" -eq 0 ]
+  [ "$(fbx_contents "$OUT/car.fbx")" = '{"Body": 6, "Wheel_FL": 34}' ]
 }
 
 @test "real Blender: --dry-run checks and plans but writes nothing" {
@@ -150,4 +193,13 @@ print("{\"cameras\": %d, \"engine\": \"%s\"}" % (len(bpy.data.cameras), bpy.cont
   [ "$status" -eq 0 ]
   [ "$(json_line)" = '{"cameras": 0, "engine": "BLENDER_EEVEE"}' ]
   [ -s "$OUT/wheel.png" ]
+}
+
+@test "real Blender: render_preview adds a missing .png extension" {
+  require_real_blender
+  use_real_blender
+  run bash "$RUN" --blend "$(car car)" render_preview.py --out "$OUT/preview" --size 32
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rendered $OUT/preview.png"* ]]
+  [ -s "$OUT/preview.png" ]
 }

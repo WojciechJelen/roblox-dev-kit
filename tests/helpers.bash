@@ -158,6 +158,19 @@ build_car() {
 
 car() { printf '%s\n' "$BATS_FILE_TMPDIR/$1/$1.blend"; }
 
+# fbx_contents FILE: import FILE into an empty scene in a fresh headless Blender and print its mesh
+# objects as one JSON line, {"Name": number of faces, ...}. This is what the export tests assert on.
+fbx_contents() {
+  BLENDER_USER_RESOURCES="$BATS_FILE_TMPDIR/blender-user" "$REAL_BLENDER" --background --quiet --python-exit-code 1 \
+    --python-expr '
+import json, sys
+import bpy
+bpy.ops.wm.read_homefile(use_empty=True, use_factory_startup=True)
+bpy.ops.import_scene.fbx(filepath=sys.argv[-1])
+print(json.dumps({o.name: len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH"}, sort_keys=True))
+' -- "$1" 2>/dev/null | grep '^{' | tail -n 1
+}
+
 # json_line: the one-line JSON report in $output (Blender prints its own lines around it).
 json_line() { printf '%s\n' "$output" | grep '^{' | tail -n 1; }
 
