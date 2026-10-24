@@ -5,12 +5,13 @@ toolchain (Rokit, Rojo, Wally, StyLua, Selene, luau-lsp, Lune, Zap, Asphalt), a 
 template, a way to move an existing Studio game into Rojo without breaking it, the Roblox Studio and
 Blender MCP servers, and a doctor that says exactly what is still missing. A third skill takes models
 from Blender into the game: it checks them against Roblox's limits, exports FBX with Roblox's
-settings and uploads them through Open Cloud.
+settings and uploads them through Open Cloud. A fourth finds free assets before anyone builds them
+by hand, checks their licenses and scans free models for backdoor scripts.
 
 It is two things at once:
 
-- a **Claude Code plugin** named `roblox` (skills, `/roblox:setup`, `/roblox:doctor`, and the
-  Blender MCP server);
+- a **Claude Code plugin** named `roblox` (skills, `/roblox:setup`, `/roblox:doctor`,
+  `/roblox:find-resources`, and the Blender MCP server);
 - a set of portable **Agent Skills** in `skills/` that Codex CLI, pi and Oh My Pi load from
   `~/.agents/skills/`.
 
@@ -23,6 +24,7 @@ The reasoning behind the stack is in [skills/roblox-setup/references/stack.md](s
 | `roblox-setup` | Installs the toolchain, scaffolds a new project or adopts an existing one, registers the MCP servers, installs the Blender MCP add-on |
 | `roblox-doctor` | Read-only checks of toolchain, project, Studio, Blender, MCP registration and Open Cloud credentials; `--json` for agents, `--fix` for safe fixes |
 | `blender-to-roblox` | Checks meshes against Roblox's limits (triangles, textures, n-gons, UVs, transforms, wheel names), renders previews, exports FBX with Roblox's documented settings, uploads assets through the Open Cloud Assets API and inserts them in Studio; works with a live Blender (Blender MCP) or headless |
+| `find-resources` | Finds free models, textures, sounds, music, icons, fonts and animations (Creator Store through Studio MCP, Poly Haven, ambientCG, Sketchfab, Kenney, Freesound and more), gates them on their license, downloads CC0 texture sets with a `CREDITS.md` entry, and scans free models for backdoor scripts |
 
 The agent decides which steps apply; shell scripts in each skill do the actual work, so every step
 can also be run by hand (each script has `--help`, most have `--dry-run`).
@@ -109,6 +111,25 @@ macOS (Linux works except for Roblox Studio), bash 3.2 or newer, git, curl, jq. 
 for the Blender steps; [uv](https://docs.astral.sh/uv/) for the Blender MCP server. Windows paths
 are stubs only.
 
+## Finding free assets
+
+Agents tend to build trees, rocks or cars from parts, which takes long and looks poor. The
+`find-resources` skill, and the `AGENTS.md` the setup skill writes into projects, make them look for
+a free asset first and propose it with its source and license. Ask "find me low-poly pine trees for
+the forest" (or `/roblox:find-resources low-poly pine trees`), and the agent searches the Creator
+Store through Studio's MCP server when Studio is connected, then the free sources:
+
+```sh
+skills/find-resources/scripts/search.sh "low poly pine tree" --type model   # results with license, triangles, links
+skills/find-resources/scripts/fetch.sh polyhaven:brick_4                    # CC0 texture set + SOURCE.json + CREDITS.md row
+skills/find-resources/scripts/scan-model.sh FreeTree.rbxm                   # backdoor scan before using a free model
+```
+
+CC0 is preferred, CC-BY gets a credit in `CREDITS.md` and on a credits screen, and non-commercial
+assets are refused. Freesound, Pixabay and Poly Pizza need free API keys (`FREESOUND_API_KEY`,
+`PIXABAY_API_KEY`, `POLY_PIZZA_API_KEY`); the other sources need none. The model scanner needs Lune,
+which the toolchain installs.
+
 ## Working with Blender
 
 The `blender-to-roblox` skill, and the `AGENTS.md` the setup skill writes into projects, hold agents
@@ -148,18 +169,26 @@ embedded. Only mesh objects are checked and exported; convert curves, text and m
   you can read, so it never appears in the process list, in output or in `--dry-run`. Give the key
   only the Assets API (read and write), and keep it out of the repository. Uploads create assets on
   your account and go through Roblox moderation; the skill asks before uploading.
+- **Free models can carry backdoors** (scripts that load code from the website, prompt purchases or
+  teleport players). The `find-resources` skill scans every community model with `scan-model.sh`
+  (Lune parses the file; nothing in it runs) or the Studio MCP's `script_grep` before it is used or
+  play-tested, and deletes scripts the model does not need. A clean scan is not a proof.
+- **Asset API keys** (`FREESOUND_API_KEY`, `PIXABAY_API_KEY`, `POLY_PIZZA_API_KEY`) are handled like
+  the Open Cloud key: `search.sh` gives them to curl in a private temporary config file and never
+  prints them. Pixabay answers are cached for 24 hours under `~/.cache/roblox-dev-kit`, as its API
+  terms require.
 - The scripts never edit shell profiles or other harness configs on their own: they print the PATH
   line to add, and MCP registration happens only through `mcp-config.sh`, idempotently.
 
 ## Repository layout
 
 ```
-skills/            the product: roblox-setup/, roblox-doctor/, blender-to-roblox/ (SKILL.md, scripts/, references/, assets/)
+skills/            the product: roblox-setup/, roblox-doctor/, blender-to-roblox/, find-resources/ (SKILL.md, scripts/, references/, assets/)
 lib/common.sh      shared shell helpers; `make sync-lib` vendors it into each skill's scripts/lib/
 mcp/               servers.json (single description of both servers) and launch wrappers
 .claude-plugin/    Claude Code plugin and marketplace manifests
 .mcp.json          the Blender server bundled with the plugin
-commands/          /roblox:setup and /roblox:doctor
+commands/          /roblox:setup, /roblox:doctor and /roblox:find-resources
 install/           install.sh / uninstall.sh for Codex, pi, Oh My Pi
 tests/             bats-core suites (fake HOME, no network unless RDK_NETWORK_TESTS=1)
 evals/             `claude plugin eval` cases (paid model runs; see Development)
@@ -182,7 +211,10 @@ make all          # check-sync, lint (shellcheck, JSON, py_compile), validate (s
   `RDK_BLENDER_TESTS=1` runs `check_mesh.py`, `export_fbx.py` and `render_preview.py` in a real
   headless Blender on scenes built on the fly (`tests/fixtures/car_scene.py`), and (with
   `RDK_TEST_ADDON_ZIP=path/to/mcp-1.0.3.zip`, or network) installs the add-on, always with Blender's
-  user folders in a temp directory (`RDK_REAL_BLENDER` picks the binary).
+  user folders in a temp directory (`RDK_REAL_BLENDER` picks the binary). The `find-resources`
+  tests replay answers captured from the real APIs through a fake curl
+  (`tests/fixtures/find-resources/`); its model-scanner tests use the real Lune and are skipped
+  when Lune is not installed (`RDK_REAL_LUNE` picks the binary).
 - `evals/` holds `claude plugin eval` cases (`setup-empty-dir`, `doctor-missing-blender`,
   `adopt-existing`, `check-mesh-report`). They are real, billed model runs, so they are not part of
   `make all`; `scripts/validate-evals.sh` checks their structure instead. Run them with

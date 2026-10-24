@@ -44,6 +44,13 @@ rojo build default.project.json -o build.rbxl
 
 `globalTypes.d.luau` comes from https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau and is git-ignored. Run the checks before declaring a change done.
 
+## Assets: find before you build
+
+- Before building something laborious or that looks poor from parts or code (trees, rocks, foliage, vehicles, characters, furniture, PBR materials, sound effects, music, icon sets), look for a free asset with the `find-resources` skill and propose it with its source and license. Build simple geometry, UI and game-specific things yourself.
+- License gate: CC0 preferred; CC-BY only with a row in `CREDITS.md` and on the in-game credits screen; never non-commercial (NC) assets; avoid share-alike (SA) and no-derivatives (ND).
+- Scan every community model before it is used or play-tested (`scan-model.sh`, or `script_grep` in Studio), and delete the scripts it does not need.
+- Downloaded files live in `assets/third-party/<source>/<id>/` with their `SOURCE.json`; Creator Store models go into a `Workspace` folder named after their source.
+
 ## Blender (when the Blender MCP server is connected)
 
 - Inspect before editing: summarize the scene and the objects involved before running any code.

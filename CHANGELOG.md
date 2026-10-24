@@ -47,6 +47,19 @@ All notable changes to this project are documented here. The format follows
   plugin folders; the doctor treats `--project` as a project and offers the plugin before a loose
   Blender server; `uninstall.sh --project` shows project-scope removal commands; `scaffold.sh`
   validates `--install-kit` first and passes `--install-kit-args` on.
+- `find-resources` skill and `/roblox:find-resources`: a "find before you build" rule for things
+  that are laborious or poor when built from parts (trees, vehicles, PBR materials, sounds, icons),
+  the Creator Store through Studio MCP `search_asset` first, then `search.sh` (Poly Haven,
+  ambientCG, Sketchfab and the Creator Store's toolbox API without keys; Freesound, Pixabay and Poly
+  Pizza with free keys kept out of argv and output), a license gate (CC0 preferred, CC-BY with a
+  credit, no NC), `fetch.sh` for CC0 texture sets with OpenGL normal maps, checksums, `SOURCE.json`
+  and a `CREDITS.md` row via `credit.sh`, and `scan-model.sh` (Lune) that lists a model's scripts
+  and flags backdoor patterns such as `require(<id>)`, `loadstring`, `getfenv`, web requests,
+  obfuscation and hidden purchase prompts. References on every source, the licenses and the
+  scanner's patterns; the template's `AGENTS.md` gained an "Assets: find before you build" section;
+  two eval cases (`find-tree-model`, `scan-free-model`).
+- `lib/common.sh`: `rdk_find_lune` (skips a Rokit shim that cannot resolve outside a project),
+  `rdk_md5`, `rdk_uri`, and a `RDK_USER_AGENT` for web requests.
 
 ### Fixed (pre-release review)
 
