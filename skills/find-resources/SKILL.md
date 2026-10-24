@@ -145,7 +145,8 @@ requests, hidden purchase prompts. Patterns, false positives and the checklist:
   default) puts the color, OpenGL normal, roughness and metalness maps in
   `assets/third-party/<source>/<id>/` with `SOURCE.json`. Roblox only reads OpenGL-style normal
   maps, which is why those are fetched. Upload each map (Asphalt, or
-  `"$SKILL_DIR/../blender-to-roblox/scripts/upload-asset.sh" FILE --name N --type Image`), then
+  `"$SKILL_DIR/../blender-to-roblox/scripts/upload-asset.sh" FILE --name N --type Image`; in Oh My
+  Pi `skill://blender-to-roblox/scripts/upload-asset.sh`), then
   set `ColorMap`, `NormalMap`, `RoughnessMap` and `MetalnessMap` on a `SurfaceAppearance` under
   the MeshPart, or on a `MaterialVariant` in `MaterialService` for Parts and Terrain (with
   `StudsPerTile`). Each PBR map is at most 1024×1024. Put the asset ids in a Luau module in the
