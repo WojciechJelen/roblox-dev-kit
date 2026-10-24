@@ -17,6 +17,8 @@ RDK_BLENDER_MIN_VERSION="5.1"
 RDK_BLENDER_MCP_SPEC="git+https://projects.blender.org/lab/blender_mcp.git@v${RDK_BLENDER_MCP_VERSION}#subdirectory=mcp"
 RDK_HARNESSES="claude codex pi omp"
 RDK_STANDARD_TOOLS="rojo wally lune stylua selene luau-lsp zap asphalt"
+# Sent with every web request the kit makes; Poly Haven's API terms ask for a user agent that names the software.
+RDK_USER_AGENT="roblox-dev-kit/${RDK_KIT_VERSION} (+https://github.com/WojciechJelen/roblox-dev-kit)"
 
 # --- overridable paths ---------------------------------------------------------
 
@@ -114,6 +116,17 @@ rdk_sha256() {
     sha256sum "$1" | cut -d' ' -f1
   fi
 }
+
+rdk_md5() {
+  if rdk_has md5sum; then
+    md5sum "$1" | cut -d' ' -f1
+  else
+    md5 -q "$1"
+  fi
+}
+
+# rdk_uri TEXT: TEXT percent-encoded for a URL query value or path segment (needs jq).
+rdk_uri() { jq -rn --arg v "$1" '$v | @uri'; }
 
 rdk_json_escape() {
   local s=$1
@@ -338,6 +351,31 @@ rdk_find_uvx() {
   fi
   for p in /opt/homebrew/bin/uvx /usr/local/bin/uvx "$RDK_HOME/.local/bin/uvx" "$RDK_HOME/.cargo/bin/uvx"; do
     if [ -x "$p" ]; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# rdk_find_lune: a lune binary that runs. RDK_LUNE_BIN if set (and only that), else lune on PATH,
+# Rokit's shim, then the newest binary in Rokit's tool storage. A Rokit shim only runs where a
+# rokit.toml (the project's or Rokit's global one) lists lune, so each candidate is tried first.
+rdk_find_lune() {
+  local p v stored='' stored_v=''
+  if [ -n "${RDK_LUNE_BIN:-}" ]; then
+    [ -x "$RDK_LUNE_BIN" ] || return 1
+    printf '%s\n' "$RDK_LUNE_BIN"
+    return 0
+  fi
+  for p in "${ROKIT_ROOT:-$RDK_HOME/.rokit}"/tool-storage/lune-org/lune/*/lune; do
+    [ -x "$p" ] || continue
+    v=$(basename "$(dirname "$p")")
+    if [ -z "$stored" ] || rdk_version_ge "$v" "$stored_v"; then stored=$p stored_v=$v; fi
+  done
+  for p in "$(command -v lune 2>/dev/null || true)" "$RDK_ROKIT_BIN_DIR/lune" "$stored"; do
+    [ -n "$p" ] && [ -x "$p" ] || continue
+    if "$p" --version 2>/dev/null | grep -qi '^lune '; then
       printf '%s\n' "$p"
       return 0
     fi

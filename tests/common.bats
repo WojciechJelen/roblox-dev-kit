@@ -90,6 +90,35 @@ setup() {
   [ "$(rdk_find_blender)" = "$RDK_BLENDER_BIN" ]
 }
 
+@test "rdk_find_lune skips a Rokit shim that cannot resolve and prefers the newest stored version" {
+  run rdk_find_lune
+  [ "$status" -ne 0 ]
+  store="$FAKE/home/.rokit/tool-storage/lune-org/lune"
+  for v in 0.9.0 0.11.1; do
+    mkdir -p "$store/$v"
+    printf '#!/bin/sh\necho "lune %s"\n' "$v" >"$store/$v/lune"
+    chmod +x "$store/$v/lune"
+  done
+  # A Rokit shim outside any project that lists lune: it fails, so the stored binary is used.
+  mkdir -p "$FAKE/home/.rokit/bin"
+  printf '#!/bin/sh\necho "ERROR Failed to find tool lune" >&2\nexit 1\n' >"$FAKE/home/.rokit/bin/lune"
+  chmod +x "$FAKE/home/.rokit/bin/lune"
+  [ "$(rdk_find_lune)" = "$store/0.11.1/lune" ]
+  fake_cmd lune 'echo "lune 0.10.0"'
+  [ "$(rdk_find_lune)" = "$FAKE/bin/lune" ]
+  RDK_LUNE_BIN="$store/0.9.0/lune"
+  [ "$(rdk_find_lune)" = "$store/0.9.0/lune" ]
+  RDK_LUNE_BIN="$FAKE/missing"
+  run rdk_find_lune
+  [ "$status" -ne 0 ]
+}
+
+@test "rdk_uri encodes query values and rdk_md5 hashes files" {
+  [ "$(rdk_uri 'rock & stone/50%')" = 'rock%20%26%20stone%2F50%25' ]
+  printf 'abc' >"$BATS_TEST_TMPDIR/f"
+  [ "$(rdk_md5 "$BATS_TEST_TMPDIR/f")" = 900150983cd24fb0d6963f7d28e17f72 ]
+}
+
 @test "rdk_find_studio_mcp finds StudioMCP in the app bundle" {
   run rdk_find_studio_mcp
   [ "$status" -ne 0 ]
