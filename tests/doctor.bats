@@ -230,18 +230,18 @@ green_machine() {
   [ "$(status_of blender.server)" = fail ]
 }
 
-@test "mcp: registered harnesses pass, missing entries fail, absent harnesses skip" {
+@test "mcp: registered harnesses pass, missing entries warn outside a project, absent harnesses skip" {
   fake_logging_cmd pi
   fake_logging_cmd omp
   mkdir -p "$HOME/.pi/agent" "$HOME/.omp/agent"
   echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"},"blender":{"command":"uvx"}}}' >"$HOME/.pi/agent/mcp.json"
   echo '{"mcpServers":{"linear":{"type":"http","url":"https://x"}}}' >"$HOME/.omp/agent/mcp.json"
   doctor_json --section mcp
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
   [ "$(status_of mcp.pi.studio)" = ok ]
   [ "$(status_of mcp.pi.blender)" = ok ]
-  [ "$(status_of mcp.omp.studio)" = fail ]
-  [ "$(status_of mcp.omp.blender)" = fail ]
+  [ "$(status_of mcp.omp.studio)" = warn ]
+  [ "$(status_of mcp.omp.blender)" = warn ]
   [ "$(status_of mcp.claude)" = skip ]
   [ "$(status_of mcp.codex)" = skip ]
 }
@@ -325,7 +325,7 @@ green_machine() {
   printf '[mcp_servers.blender]\ncommand = "uvx"\n' >"$HOME/.codex/config.toml"
   cd "$FAKE/proj"
   doctor_json --section mcp
-  [ "$(status_of mcp.omp.studio)" = fail ]
+  [ "$(status_of mcp.omp.studio)" = warn ]
   printf 'enabledProviders:\n  - claude\n  - codex\n' >"$HOME/.omp/agent/config.yml"
   doctor_json --section mcp
   [ "$status" -eq 0 ]
@@ -362,4 +362,55 @@ green_machine() {
   doctor_json --section toolchain --project "$FAKE/game" --fix
   [ "$(cat "$FAKE/calls.log")" = "rokit install" ]
   [[ "$stderr" == *"run roblox-setup scripts/install-toolchain.sh --trust"* ]]
+}
+
+@test "mcp outside a project: a missing server is a warning that points at per-project registration" {
+  fake_logging_cmd codex
+  doctor_json --section mcp
+  [ "$status" -eq 0 ]
+  [ "$(status_of mcp.codex.studio)" = warn ]
+  [[ "$(detail_of mcp.codex.studio)" == *"not registered at user scope (~/.codex/config.toml); project-level registration is fine"* ]]
+  [[ "$(printf '%s' "$output" | jq -r '.checks[] | select(.id == "mcp.codex.studio") | .fix')" == *"--project DIR"* ]]
+}
+
+@test "mcp inside a project: every harness's project files count; registered nowhere fails" {
+  fake_logging_cmd claude
+  fake_logging_cmd codex
+  fake_logging_cmd pi
+  fake_logging_cmd omp
+  scaffold_project "$FAKE/game"
+  cd "$FAKE/game/src"
+  doctor_json --section mcp
+  [ "$status" -eq 1 ]
+  [ "$(status_of mcp.codex.studio)" = fail ]
+  [[ "$(detail_of mcp.codex.studio)" == *"not registered for this project (./.codex/config.toml) or at user scope"* ]]
+  [[ "$(printf '%s' "$output" | jq -r '.checks[] | select(.id == "mcp.codex.studio") | .fix')" == *"--harness codex --project "*"/machine/game" ]]
+  servers='{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"},"blender":{"command":"uvx"}}}'
+  mkdir -p "$FAKE/game/.codex" "$FAKE/game/.pi" "$FAKE/game/.omp" "$FAKE/game/.claude"
+  printf '[mcp_servers.Roblox_Studio]\ncommand = "/S/StudioMCP"\n\n[mcp_servers.blender]\ncommand = "uvx"\n' >"$FAKE/game/.codex/config.toml"
+  echo "$servers" >"$FAKE/game/.pi/mcp.json"
+  echo "$servers" >"$FAKE/game/.omp/mcp.json"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"}}}' >"$FAKE/game/.mcp.json"
+  echo '{"enabledPlugins":{"roblox@roblox-dev-kit":true}}' >"$FAKE/game/.claude/settings.json"
+  doctor_json --section mcp
+  [ "$status" -eq 0 ]
+  [ "$(detail_of mcp.codex.studio)" = "Roblox_Studio registered (./.codex/config.toml, project scope (trusted projects only))" ]
+  [ "$(detail_of mcp.pi.blender)" = "blender registered (./.pi/mcp.json, project scope (trusted projects only))" ]
+  [ "$(detail_of mcp.omp.studio)" = "Roblox_Studio registered (project file ./.omp/mcp.json (imported by default))" ]
+  [ "$(detail_of mcp.claude.studio)" = "Roblox_Studio registered (./.mcp.json, project scope)" ]
+  [[ "$(detail_of mcp.claude.blender)" == *"provided by the roblox plugin"* ]]
+}
+
+@test "mcp: --project DIR reads that project's files from anywhere" {
+  fake_logging_cmd pi
+  scaffold_project "$FAKE/game"
+  mkdir -p "$FAKE/game/.pi"
+  echo '{"mcpServers":{"Roblox_Studio":{"command":"/S/StudioMCP"},"blender":{"command":"uvx"}}}' >"$FAKE/game/.pi/mcp.json"
+  cd "$FAKE/home"
+  doctor_json --section mcp
+  [ "$(status_of mcp.pi.studio)" = warn ]
+  doctor_json --section mcp --project "$FAKE/game"
+  [ "$status" -eq 0 ]
+  [ "$(status_of mcp.pi.studio)" = ok ]
+  [ "$(status_of mcp.pi.blender)" = ok ]
 }

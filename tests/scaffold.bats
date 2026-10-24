@@ -105,3 +105,33 @@ setup() {
   [ "$status" -eq 0 ]
   [ -f "$FAKE/game/sourcemap.json" ]
 }
+
+@test "--install-kit installs the kit into the new project, and only when asked" {
+  fake_studio
+  fake_blender
+  fake_cmd uvx 'exit 0'
+  fake_logging_cmd codex
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/plain" "Plain Game" --no-git
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--harness all --project"* ]] # offered, not done
+  [ ! -e "$FAKE/plain/.agents" ]
+  [ ! -e "$FAKE/plain/.codex" ]
+  run bash "$SETUP_SCRIPTS/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit=codex
+  [ "$status" -eq 0 ]
+  [ -L "$FAKE/game/.agents/skills/roblox-setup" ]
+  [ -L "$FAKE/game/.agents/skills/blender-to-roblox" ]
+  grep -q '^\[mcp_servers.blender\]$' "$FAKE/game/.codex/config.toml"
+  [ -f "$FAKE/game/default.project.json" ]
+  [ ! -e "$HOME/.agents" ]
+  [ ! -e "$HOME/.codex" ]
+  [ ! -e "$FAKE/calls.log" ] # codex mcp add (user scope) was never called
+}
+
+@test "--install-kit from a skill copy without the kit's installer says what to run" {
+  cp -R "$KIT_ROOT/skills/roblox-setup" "$FAKE/roblox-setup"
+  run bash "$FAKE/roblox-setup/scripts/scaffold.sh" "$FAKE/game" "Test Game" --no-git --install-kit
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"this copy of the skill does not include"* ]]
+  [[ "$output" == *"install/install.sh --harness all --project"* ]]
+  [ -f "$FAKE/game/default.project.json" ]
+}

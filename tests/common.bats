@@ -319,3 +319,23 @@ EOF
   run ! rdk_omp_where blender
   [ -z "$(rdk_mcp_launch_lines claude)" ]
 }
+
+@test "RDK_PROJECT_DIR, not the current directory, decides which project files count" {
+  mkdir -p "$FAKE/game/.codex" "$FAKE/game/.pi" "$FAKE/game/.claude" "$FAKE/elsewhere"
+  printf '[mcp_servers.Roblox_Studio]\ncommand = "/S/StudioMCP"\n' >"$FAKE/game/.codex/config.toml"
+  echo '{"mcpServers":{"blender":{"command":"uvx"}}}' >"$FAKE/game/.pi/mcp.json"
+  echo '{"enabledPlugins":{"roblox@roblox-dev-kit":true}}' >"$FAKE/game/.claude/settings.json"
+  cd "$FAKE/elsewhere"
+  run ! rdk_mcp_has codex Roblox_Studio
+  run ! rdk_claude_plugin_enabled
+  RDK_PROJECT_DIR="$FAKE/game"
+  [ "$(rdk_mcp_where codex Roblox_Studio)" = "./.codex/config.toml, project scope (trusted projects only)" ]
+  [ "$(rdk_mcp_where pi blender)" = "./.pi/mcp.json, project scope (trusted projects only)" ]
+  [ "$(rdk_mcp_names_matching codex StudioMCP)" = Roblox_Studio ]
+  rdk_claude_plugin_enabled
+}
+
+@test "the marketplace name constant matches marketplace.json" {
+  [ "$(jq -r .name "$KIT_ROOT/.claude-plugin/marketplace.json")" = "$RDK_MARKETPLACE_NAME" ]
+  [ "$(jq -r '.plugins[0].name' "$KIT_ROOT/.claude-plugin/marketplace.json")" = "$RDK_PLUGIN_NAME" ]
+}

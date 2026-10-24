@@ -10,6 +10,7 @@ set -euo pipefail
 
 RDK_KIT_VERSION="0.1.0"
 RDK_PLUGIN_NAME="roblox"
+RDK_MARKETPLACE_NAME="roblox-dev-kit" # .claude-plugin/marketplace.json "name"
 RDK_STUDIO_SERVER="Roblox_Studio"   # the name Studio's own "Quick connect" uses
 RDK_BLENDER_SERVER="blender"
 RDK_BLENDER_MCP_VERSION="1.0.3"
@@ -394,6 +395,13 @@ rdk_codex_config() { printf '%s\n' "${CODEX_HOME:-$RDK_HOME/.codex}/config.toml"
 rdk_pi_mcp_json() { printf '%s\n' "$RDK_HOME/.pi/agent/mcp.json"; }
 rdk_omp_mcp_json() { printf '%s\n' "$RDK_HOME/.omp/agent/mcp.json"; }
 
+# Project-level configs belong to the project the scripts work on: RDK_PROJECT_DIR (set by
+# mcp-config.sh --project and by the doctor inside a project), else the current directory.
+rdk_project_dir() { printf '%s\n' "${RDK_PROJECT_DIR:-$PWD}"; }
+rdk_codex_project_config() { printf '%s/.codex/config.toml\n' "$(rdk_project_dir)"; }
+rdk_pi_project_mcp_json() { printf '%s/.pi/mcp.json\n' "$(rdk_project_dir)"; }
+rdk_omp_project_mcp_json() { printf '%s/.omp/mcp.json\n' "$(rdk_project_dir)"; }
+
 rdk_harness_mcp_config() {
   case $1 in
     claude) rdk_claude_json ;;
@@ -417,11 +425,11 @@ rdk_harness_skills_dir() {
 # Launch lines are "name<TAB>command args..." and feed the duplicate check.
 
 # rdk_json_launch_lines FILE FILTER: launch lines for the server map that jq FILTER selects
-# ($cwd is bound to $PWD). Needs jq.
+# ($cwd is bound to the project directory). Needs jq.
 rdk_json_launch_lines() {
   [ -f "$1" ] || return 0
   rdk_has_jq || return 1
-  jq -r --arg cwd "$PWD" "$2"' | to_entries[]
+  jq -r --arg cwd "$(rdk_project_dir)" "$2"' | to_entries[]
     | "\(.key)\t\(.value.command // .value.url // "") \((.value.args // []) | join(" "))"' "$1"
 }
 
@@ -450,7 +458,7 @@ rdk_toml_launch_lines() {
 rdk_json_has_server() {
   [ -f "$1" ] || return 1
   if rdk_has_jq; then
-    jq -e --arg cwd "$PWD" --arg n "$3" "$2"' | has($n)' "$1" >/dev/null 2>&1
+    jq -e --arg cwd "$(rdk_project_dir)" --arg n "$3" "$2"' | has($n)' "$1" >/dev/null 2>&1
   else
     grep -Eq "\"$3\"[[:space:]]*:[[:space:]]*\\{" "$1"
   fi
@@ -458,15 +466,19 @@ rdk_json_has_server() {
 
 rdk_toml_has_server() { rdk_toml_launch_lines "$1" | cut -f1 | grep -Fxq -- "$2"; }
 
-# rdk_project_mcp_json: ./.mcp.json as a project config. A .mcp.json next to
-# .claude-plugin/plugin.json is a plugin's bundled config (this kit's own repo), not a project's.
+# rdk_project_mcp_json: the project's .mcp.json. A .mcp.json next to .claude-plugin/plugin.json
+# is a plugin's bundled config (this kit's own repo), not a project's.
 rdk_project_mcp_json() {
-  [ -f "$PWD/.claude-plugin/plugin.json" ] && return 1
-  printf '%s\n' "$PWD/.mcp.json"
+  local d
+  d=$(rdk_project_dir)
+  [ -f "$d/.claude-plugin/plugin.json" ] && return 1
+  printf '%s\n' "$d/.mcp.json"
 }
 
-# rdk_mcp_launch_lines HARNESS: every server the harness's own configs define. Claude Code:
-# user scope, local scope for $PWD and the project's .mcp.json. OMP: its native mcp.json only.
+# rdk_mcp_launch_lines HARNESS: every server the harness's own configs define, at user scope and
+# for the project. Claude Code: user scope, local scope for the project and its .mcp.json.
+# Codex, pi and OMP: the user file and the project's .codex/config.toml, .pi/mcp.json or
+# .omp/mcp.json (OMP's imports of other tools' files are not listed).
 rdk_mcp_launch_lines() {
   local f
   case $1 in
@@ -474,9 +486,19 @@ rdk_mcp_launch_lines() {
       rdk_json_launch_lines "$(rdk_claude_json)" '[(.mcpServers // {}), (.projects[$cwd].mcpServers // {})] | add' || return 1
       if f=$(rdk_project_mcp_json); then rdk_json_launch_lines "$f" '(.mcpServers // {})'; fi
       ;;
-    codex) rdk_toml_launch_lines "$(rdk_codex_config)" ;;
-    pi) rdk_json_launch_lines "$(rdk_pi_mcp_json)" '(.mcpServers // {})' ;;
-    omp) rdk_json_launch_lines "$(rdk_omp_mcp_json)" '(.mcpServers // {})' ;;
+    codex)
+      rdk_toml_launch_lines "$(rdk_codex_config)"
+      # In the home directory the "project" file is the user config itself.
+      [ "$(rdk_codex_project_config)" = "$(rdk_codex_config)" ] || rdk_toml_launch_lines "$(rdk_codex_project_config)"
+      ;;
+    pi)
+      rdk_json_launch_lines "$(rdk_pi_mcp_json)" '(.mcpServers // {})' || return 1
+      rdk_json_launch_lines "$(rdk_pi_project_mcp_json)" '(.mcpServers // {})'
+      ;;
+    omp)
+      rdk_json_launch_lines "$(rdk_omp_mcp_json)" '(.mcpServers // {})' || return 1
+      rdk_json_launch_lines "$(rdk_omp_project_mcp_json)" '(.mcpServers // {})'
+      ;;
     *) return 1 ;;
   esac
 }
@@ -497,8 +519,26 @@ rdk_mcp_where() {
         return 1
       fi
       ;;
-    codex) f=$(rdk_codex_config) && rdk_toml_has_server "$f" "$n" && rdk_tilde "$f" ;;
-    pi) f=$(rdk_pi_mcp_json) && rdk_json_has_server "$f" '(.mcpServers // {})' "$n" && rdk_tilde "$f" ;;
+    codex)
+      f=$(rdk_codex_config)
+      if rdk_toml_has_server "$f" "$n"; then
+        rdk_tilde "$f"
+      elif rdk_toml_has_server "$(rdk_codex_project_config)" "$n"; then
+        printf './.codex/config.toml, project scope (trusted projects only)\n'
+      else
+        return 1
+      fi
+      ;;
+    pi)
+      f=$(rdk_pi_mcp_json)
+      if rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
+        rdk_tilde "$f"
+      elif rdk_json_has_server "$(rdk_pi_project_mcp_json)" '(.mcpServers // {})' "$n"; then
+        printf './.pi/mcp.json, project scope (trusted projects only)\n'
+      else
+        return 1
+      fi
+      ;;
     omp) rdk_omp_where "$n" ;;
     *) return 1 ;;
   esac
@@ -576,21 +616,22 @@ rdk_omp_project_sources_enabled() {
 
 # rdk_omp_where NAME: OMP's source for server NAME, in OMP's precedence order.
 rdk_omp_where() {
-  local n=$1 f
+  local n=$1 f d
+  d=$(rdk_project_dir)
   f=$(rdk_omp_mcp_json)
   if rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
     rdk_tilde "$f"
     return 0
   fi
   if rdk_omp_project_sources_enabled; then
-    for f in "$PWD/.omp/mcp.json" "$(rdk_project_mcp_json || true)"; do
+    for f in "$(rdk_omp_project_mcp_json)" "$(rdk_project_mcp_json || true)"; do
       [ -n "$f" ] || continue
       if rdk_json_has_server "$f" '(.mcpServers // {})' "$n"; then
-        printf 'project file ./%s (imported by default)\n' "${f#"$PWD"/}"
+        printf 'project file ./%s (imported by default)\n' "${f#"$d"/}"
         return 0
       fi
     done
-    if rdk_toml_has_server "$PWD/.codex/config.toml" "$n"; then
+    if rdk_toml_has_server "$(rdk_codex_project_config)" "$n"; then
       printf 'project file ./.codex/config.toml (imported by default)\n'
       return 0
     fi
@@ -616,11 +657,13 @@ rdk_omp_where() {
   return 1
 }
 
-# The Claude Code plugin counts as enabled when any roblox@<marketplace> entry is true
-# in the user settings or in the current project's settings.
+# The Claude Code plugin counts as enabled when any roblox@<marketplace> entry is true in the user
+# settings or in the project's settings: `claude plugin install --scope project` writes
+# .claude/settings.json, `--scope local` .claude/settings.local.json (enabledPlugins).
 rdk_claude_plugin_enabled() {
-  local f
-  for f in "$(rdk_claude_dir)/settings.json" "$PWD/.claude/settings.json" "$PWD/.claude/settings.local.json"; do
+  local f d
+  d=$(rdk_project_dir)
+  for f in "$(rdk_claude_dir)/settings.json" "$d/.claude/settings.json" "$d/.claude/settings.local.json"; do
     [ -f "$f" ] || continue
     if rdk_has_jq; then
       jq -e --arg p "$RDK_PLUGIN_NAME@" \

@@ -10,19 +10,32 @@ TEMPLATE_DIR=$(cd "$SCRIPT_DIR/../assets/template" && pwd)
 
 usage() {
   cat <<EOF
-usage: scaffold.sh <dir> <name> [--force] [--no-git]
+usage: scaffold.sh <dir> <name> [--force] [--no-git] [--install-kit[=HARNESS]]
 
 Copies the project template into <dir> (created if missing) and names the project <name>.
-  --force   write into a non-empty directory, overwriting files with the same names
-  --no-git  do not run git init
+  --force        write into a non-empty directory, overwriting files with the same names
+  --no-git       do not run git init
+  --install-kit  then install this kit into the new project for HARNESS (codex, pi, omp, claude or
+                 all; default all installed harnesses): skills in <dir>/.agents/skills, MCP servers
+                 in the project's own config files, and for Claude Code the project-scope plugin
+                 commands to run (install/install.sh --harness HARNESS --project <dir>). Never done
+                 without this flag.
 EOF
 }
 
-force=0 git=1 dir='' name=''
+force=0 git=1 dir='' name='' install_kit=''
 while [ $# -gt 0 ]; do
   case $1 in
     --force) force=1 ;;
     --no-git) git=0 ;;
+    --install-kit) install_kit=all ;;
+    --install-kit=*)
+      install_kit=${1#--install-kit=}
+      [ -n "$install_kit" ] || {
+        rdk_err "--install-kit= needs a harness"
+        exit 2
+      }
+      ;;
     -h | --help)
       usage
       exit 0
@@ -87,4 +100,18 @@ if rdk_has rojo; then
 fi
 
 rdk_info "created $name in $(rdk_tilde "$dir")"
+
+# The kit's installer lives at the root of the kit, three levels above this script's real location
+# (the skill folder may be a symlink into the kit, or the Claude Code plugin's copy of it).
+kit_root=$(cd "$(cd "$SCRIPT_DIR" && pwd -P)/../../.." && pwd)
+installer="$kit_root/install/install.sh"
+if [ -n "$install_kit" ]; then
+  [ -f "$installer" ] ||
+    rdk_die "--install-kit needs the kit's install/install.sh, which this copy of the skill does not include; from a checkout of roblox-dev-kit run: install/install.sh --harness $install_kit --project $(rdk_quote "$dir")"
+  rdk_info "installing the kit into the project: $(rdk_quote "$installer" --harness "$install_kit" --project "$dir")"
+  bash "$installer" --harness "$install_kit" --project "$dir" ||
+    rdk_die "the per-project install did not finish (output above); the project itself is complete"
+elif [ -f "$installer" ]; then
+  rdk_info "to make it ready for every agent harness: $(rdk_quote "$installer" --harness all --project "$dir") (or re-run with --install-kit)"
+fi
 rdk_info "next: install-toolchain.sh --project $(rdk_quote "$dir"), then 'rojo serve' and connect the Rojo plugin in Studio"

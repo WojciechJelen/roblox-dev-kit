@@ -358,19 +358,44 @@ section_blender() {
   fi
 }
 
+# missing_server HARNESS ID NAME: report a server the harness does not get. Inside a project it is
+# a failure (registered nowhere the harness reads for this project). Outside any project only the
+# user scope is visible, and per-project registration is a valid choice, so it is a warning.
+missing_server() {
+  local h=$1 id=$2 name=$3
+  if [ -n "$PROJECT_ROOT" ]; then
+    check "$id" fail "$name not registered for this project ($(project_files "$h")) or at user scope ($(rdk_tilde "$(rdk_harness_mcp_config "$h")"))" \
+      "roblox-setup: scripts/mcp-config.sh --harness $h --project $(rdk_quote "$PROJECT_ROOT")"
+  else
+    check "$id" warn "$name not registered at user scope ($(rdk_tilde "$(rdk_harness_mcp_config "$h")")); project-level registration is fine: run the doctor inside the project (or with --project DIR)" \
+      "per project: roblox-setup scripts/mcp-config.sh --harness $h --project DIR; user scope: --harness $h"
+  fi
+}
+
+# project_files HARNESS: the project-level files the harness reads (for messages).
+project_files() {
+  case $1 in
+    claude) echo "./.mcp.json, .claude/settings.json plugins" ;;
+    codex) echo "./.codex/config.toml" ;;
+    pi) echo "./.pi/mcp.json" ;;
+    omp) echo "./.omp/mcp.json, ./.mcp.json, ./.codex/config.toml" ;;
+  esac
+}
+
 section_mcp() {
-  local h cfg where studio_names blender_names dupes
+  local h where studio_names blender_names dupes
+  # Project-level registrations count for the project the doctor checks (else the start directory).
+  local RDK_PROJECT_DIR=${PROJECT_ROOT:-$start_dir}
   for h in $RDK_HARNESSES; do
     if ! rdk_harness_installed "$h"; then
       check "mcp.$h" skip "$h is not installed"
       continue
     fi
-    cfg=$(rdk_tilde "$(rdk_harness_mcp_config "$h")")
 
     if where=$(rdk_mcp_where "$h" "$RDK_STUDIO_SERVER"); then
       check "mcp.$h.studio" ok "$RDK_STUDIO_SERVER registered ($where)"
     else
-      check "mcp.$h.studio" fail "$RDK_STUDIO_SERVER not registered ($cfg)" "roblox-setup: scripts/mcp-config.sh --harness $h"
+      missing_server "$h" "mcp.$h.studio" "$RDK_STUDIO_SERVER"
     fi
 
     if [ "$h" = claude ] && rdk_claude_plugin_enabled; then
@@ -378,7 +403,7 @@ section_mcp() {
     elif where=$(rdk_mcp_where "$h" "$RDK_BLENDER_SERVER"); then
       check "mcp.$h.blender" ok "$RDK_BLENDER_SERVER registered ($where)"
     else
-      check "mcp.$h.blender" fail "$RDK_BLENDER_SERVER not registered ($cfg)" "roblox-setup: scripts/mcp-config.sh --harness $h"
+      missing_server "$h" "mcp.$h.blender" "$RDK_BLENDER_SERVER"
     fi
 
     if [ "$h" != codex ] && ! rdk_has_jq; then

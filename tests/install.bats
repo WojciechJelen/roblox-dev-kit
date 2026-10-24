@@ -44,11 +44,67 @@ setup() {
   fake_logging_cmd claude
   fake_logging_cmd omp
   mkdir -p "$FAKE/game"
-  run bash "$INSTALL" --harness all --project "$FAKE/game" --no-mcp
+  run bash "$INSTALL" --harness all --project "$FAKE/game" --no-mcp --no-plugin
   [ "$status" -eq 0 ]
   [ -L "$FAKE/game/.agents/skills/roblox-setup" ]
   [ -L "$FAKE/game/.claude/skills/roblox-setup" ]
   [ ! -e "$HOME/.agents" ]
+  [ ! -e "$HOME/.claude/skills" ]
+}
+
+@test "--project: Claude Code gets the project-scope plugin commands (printed, not run) and only Studio's MCP server" {
+  fake_studio
+  fake_blender
+  fake_cmd uvx 'exit 0'
+  fake_cmd claude "{ printf '%s:' \"\$PWD\"; printf ' [%s]' \"\$@\"; echo; } >>\"$FAKE/calls.log\""
+  mkdir -p "$FAKE/game"
+  run bash "$INSTALL" --harness claude --project "$FAKE/game" --no-warm
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cd $FAKE/game && claude plugin marketplace add $KIT_ROOT --scope project"* ]]
+  [[ "$output" == *"cd $FAKE/game && claude plugin install roblox@roblox-dev-kit --scope project"* ]]
+  [ ! -e "$FAKE/game/.claude/skills" ]
+  run ! grep -q 'plugin' "$FAKE/calls.log" # printed only
+  [ "$(wc -l <"$FAKE/calls.log" | tr -d ' ')" -eq 1 ]
+  grep -qF "$FAKE/game: [mcp] [add-json] [-s] [project] [Roblox_Studio]" "$FAKE/calls.log"
+}
+
+@test "--project: an already enabled plugin is not offered again, and --no-plugin registers both servers" {
+  fake_studio
+  fake_blender
+  fake_cmd uvx 'exit 0'
+  fake_logging_cmd claude
+  mkdir -p "$FAKE/game/.claude"
+  echo '{"enabledPlugins":{"roblox@roblox-dev-kit":true}}' >"$FAKE/game/.claude/settings.json"
+  run bash "$INSTALL" --harness claude --project "$FAKE/game" --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"plugin is enabled and already provides these skills"* ]]
+  [[ "$output" != *"claude plugin install"* ]]
+  [[ "$output" == *"claude mcp add-json -s project Roblox_Studio"* ]]
+  [[ "$output" != *"add-json -s project blender"* ]]
+  rm "$FAKE/game/.claude/settings.json"
+  run bash "$INSTALL" --harness claude --project "$FAKE/game" --no-plugin --dry-run
+  [[ "$output" == *"would link    $FAKE/game/.claude/skills/roblox-setup"* ]]
+  [[ "$output" == *"claude mcp add-json -s project Roblox_Studio"* ]]
+  [[ "$output" == *"claude mcp add-json -s project blender"* ]]
+  [ ! -e "$FAKE/calls.log" ]
+}
+
+@test "--project registers MCP servers in the project's files for the other harnesses" {
+  fake_studio
+  fake_blender
+  fake_cmd uvx 'exit 0'
+  fake_logging_cmd codex
+  fake_logging_cmd omp
+  mkdir -p "$FAKE/game"
+  run bash "$INSTALL" --harness all --project "$FAKE/game" --no-warm
+  [ "$status" -eq 0 ]
+  grep -q '^\[mcp_servers.Roblox_Studio\]$' "$FAKE/game/.codex/config.toml"
+  # Oh My Pi imports the project's .codex/config.toml by default, so it needs no copy of its own.
+  [[ "$output" == *"omp: Roblox_Studio already registered (project file ./.codex/config.toml (imported by default))"* ]]
+  [ ! -e "$FAKE/game/.omp" ]
+  [ ! -e "$HOME/.codex/config.toml" ]
+  [ ! -e "$HOME/.omp/agent/mcp.json" ]
+  [ ! -e "$FAKE/calls.log" ]
 }
 
 @test "--copy copies and marks the copy as ours" {
