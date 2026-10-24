@@ -98,7 +98,7 @@ write_case() {
 @test "the repository's eval cases pass" {
   run bash "$KIT_ROOT/scripts/validate-evals.sh"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"validate-evals: ok (4 cases)"* ]]
+  [[ "$output" == *"validate-evals: ok (6 cases)"* ]]
 }
 
 @test "a well-formed eval case passes" {
