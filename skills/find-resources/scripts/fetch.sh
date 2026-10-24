@@ -10,6 +10,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/common.sh"
 
 CC0_URL="https://creativecommons.org/publicdomain/zero/1.0/"
+# Largest file unpacked from a zip (ambientCG's 8K maps are far smaller); RDK_MAX_ZIP_MEMBER overrides it.
+MAX_MEMBER_BYTES=${RDK_MAX_ZIP_MEMBER:-$((200 * 1024 * 1024))}
 
 usage() {
   cat <<EOF
@@ -79,6 +81,7 @@ case $id in
 esac
 case $res in 1k | 2k) ;; *) usage_error "--res must be 1k or 2k" ;; esac
 [ -n "$out" ] || usage_error "--out must not be empty"
+case $MAX_MEMBER_BYTES in '' | *[!0-9]*) usage_error "RDK_MAX_ZIP_MEMBER must be a number of bytes" ;; esac
 
 case $src in
   polyhaven | ambientcg) ;;
@@ -227,9 +230,13 @@ else
       rdk_info "downloading $(jq -r '.fileName // "the zip"' <<<"$zip_entry") ($(jq -r '(.size // 0) / 1048576 * 10 | round / 10' <<<"$zip_entry") MB)"
       download "$(jq -r '.downloadLink' <<<"$zip_entry")" "$tmp/asset.zip" "$(jq -r '.size // empty' <<<"$zip_entry")"
       # Pick members by name; -j drops any folder part, so nothing lands outside the stage folder.
+      # Names come from the exact listing (-Z1), type and size from the long one (-Z), in the same order.
       members=$(unzip -Z1 "$tmp/asset.zip" 2>/dev/null) || rdk_die "the ambientCG download is not a readable zip"
+      details=$(unzip -Z "$tmp/asset.zip" 2>/dev/null | awk '$2 ~ /^[0-9]+\.[0-9]+$/ && NF >= 9 { print substr($1, 1, 1) "\t" $4 }')
+      [ "$(printf '%s\n' "$members" | wc -l)" -eq "$(printf '%s\n' "$details" | wc -l)" ] ||
+        rdk_die "could not read the ambientCG zip's file list"
       wanted='' seen=''
-      while IFS= read -r m; do
+      while IFS= read -r m && IFS=$'\t' read -r type size <&3; do
         case $m in
           /* | ../* | */../* | *\\*)
             rdk_warn "skipping $m in the zip (its path leaves the folder)"
@@ -249,13 +256,28 @@ else
           *.obj | *.mtl) [ "$kind" = model ] || continue; prop="mesh (Studio 3D Importer or blender-to-roblox)" map=mesh ;;
           *) continue ;;
         esac
-        wanted="$wanted$m"$'\n' seen="$seen $base"
+        # A link (on macOS unzip would recreate it) or a directory is never a texture.
+        if [ "$type" = l ] || [ "$type" = d ]; then
+          rdk_warn "skipping $m in the zip (it is a link or a folder, not a file)"
+          continue
+        fi
+        case $size in '' | *[!0-9]*) rdk_die "could not read the size of $m in the zip" ;; esac
+        [ "$size" -le "$MAX_MEMBER_BYTES" ] ||
+          rdk_die "refusing $m in the zip: it unpacks to $size bytes, more than the $MAX_MEMBER_BYTES allowed per file"
+        wanted="$wanted$m"$'\t'"$size"$'\n' seen="$seen $base"
         add_file "$base" "$map" "$prop"
-      done <<<"$members"
+      done <<<"$members" 3<<<"$details"
       [ -n "$wanted" ] || rdk_die "the ambientCG zip has none of the expected maps"
-      while IFS= read -r m; do
+      [ "$kind" != texture ] || jq -e 'any(.[]; .map == "Color")' "$tmp/files.json" >/dev/null ||
+        rdk_die "the ambientCG zip has no usable color map"
+      # unzip -p writes a member's bytes to stdout: nothing it unpacks can become a link. Its member
+      # argument is a pattern, so [, * and ? are escaped with brackets.
+      while IFS=$'\t' read -r m size; do
         [ -n "$m" ] || continue
-        unzip -j -o -q "$tmp/asset.zip" "$m" -d "$tmp/stage" || rdk_die "could not unpack $m"
+        pattern=$(printf '%s' "$m" | sed -e 's/\[/[[]/g' -e 's/\*/[*]/g' -e 's/?/[?]/g')
+        unzip -p "$tmp/asset.zip" "$pattern" >"$tmp/stage/${m##*/}" 2>"$tmp/unzip.err" ||
+          rdk_die "could not unpack $m ($(head -n 1 "$tmp/unzip.err"))"
+        [ "$(wc -c <"$tmp/stage/${m##*/}" | tr -d ' ')" = "$size" ] || rdk_die "$m did not unpack to the size the zip lists"
       done <<<"$wanted"
       page="https://ambientcg.com/view?id=$id"
       ;;
@@ -268,6 +290,9 @@ else
     {source: $source, id: $id, name: $name, type: $kind, authors: ($authors | split(", ")),
      license: "CC0", licenseUrl: $cc0, page: $page, resolution: $res, downloaded: $date, files: $files[0]}' >"$tmp/source.json"
 
+  for f in "$tmp/stage"/*; do
+    [ ! -L "$f" ] || rdk_die "refusing $(basename "$f"): it is a link"
+  done
   # Replace the folder's previous copy only once everything downloaded.
   mkdir -p "$dest"
   while IFS= read -r f; do

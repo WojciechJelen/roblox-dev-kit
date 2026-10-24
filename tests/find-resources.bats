@@ -403,6 +403,60 @@ z.close()' "$FAKE/routes/Bricks100_1K-JPG.zip"
   grep -qF 'ambientcg.com/get?file=Bricks100_1K-JPG.zip' "$FAKE/urls.log"
 }
 
+# acg_zip PYTHON_STATEMENTS: build the Bricks100 1K zip from statements that use the zipfile `z`
+# (and `stat`), and serve it with a matching size.
+acg_zip() {
+  [ -n "$REAL_PYTHON" ] || skip "python3 is needed to build the test zip"
+  "$REAL_PYTHON" -I -c "import sys, zipfile, stat
+z = zipfile.ZipFile(sys.argv[1], 'w')
+$1
+z.close()" "$FAKE/routes/Bricks100_1K-JPG.zip"
+  local size
+  size=$(wc -c <"$FAKE/routes/Bricks100_1K-JPG.zip" | tr -d ' ')
+  jq --argjson s "$size" '(.foundAssets[0].downloadFolders.default.downloadFiletypeCategories.zip.downloads[] | select(.attribute == "1K-JPG") | .size) = $s' \
+    "$FIX/ambientcg-asset-Bricks100.json" >"$FAKE/routes/ambientcg-asset-Bricks100.json"
+}
+
+@test "fetch: a link in the ambientCG zip is never unpacked, and without a color map nothing is kept" {
+  acg_zip '
+z.writestr("Bricks100_1K-JPG_NormalGL.jpg", "fake NormalGL")
+z.writestr("Bricks100_1K-JPG_Roughness.jpg", "fake Roughness")
+link = zipfile.ZipInfo("Bricks100_1K-JPG_Color.jpg")
+link.create_system = 3
+link.external_attr = (stat.S_IFLNK | 0o777) << 16
+z.writestr(link, "/etc/passwd")'
+  run bash "$FETCH" ambientcg:Bricks100 --out "$FAKE/home/game/assets"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"skipping Bricks100_1K-JPG_Color.jpg in the zip (it is a link or a folder"* ]]
+  [[ "$output" == *"no usable color map"* ]]
+  [ ! -e "$FAKE/home/game/assets/ambientcg/Bricks100" ]
+  [ "$(find "$FAKE" -type l -name '*Color*' | wc -l | tr -d ' ')" -eq 0 ]
+  [ ! -e "$FAKE/home/CREDITS.md" ]
+}
+
+@test "fetch: zip members whose folders hold [, * or ? unpack by their exact names" {
+  acg_zip '
+z.writestr("ok[1]/Bricks100_1K-JPG_Color.jpg", "fake Color")
+z.writestr("ok1/Bricks100_1K-JPG_Color.jpg", "decoy Colr")
+z.writestr("evil*/Bricks100_1K-JPG_NormalGL.jpg", "fake NormalGL")
+z.writestr("what?/Bricks100_1K-JPG_Roughness.jpg", "fake Roughness")'
+  run bash "$FETCH" ambientcg:Bricks100 --out "$FAKE/home/game/assets"
+  [ "$status" -eq 0 ]
+  d="$FAKE/home/game/assets/ambientcg/Bricks100"
+  [ "$(cat "$d/Bricks100_1K-JPG_Color.jpg")" = "fake Color" ]
+  [ "$(cat "$d/Bricks100_1K-JPG_NormalGL.jpg")" = "fake NormalGL" ]
+  [ "$(cat "$d/Bricks100_1K-JPG_Roughness.jpg")" = "fake Roughness" ]
+  # Unescaped, the pattern ok[1]/... would have matched the decoy ok1/... instead.
+}
+
+@test "fetch: a zip member over the size cap is refused" {
+  ambientcg_routes
+  RDK_MAX_ZIP_MEMBER=8 run bash "$FETCH" ambientcg:Bricks100 --out "$FAKE/home/game/assets"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"refusing Bricks100_1K-JPG_Color.jpg in the zip: it unpacks to 14 bytes, more than the 8 allowed per file"* ]]
+  [ ! -e "$FAKE/home/game/assets/ambientcg/Bricks100" ]
+}
+
 @test "fetch: sources that need a login print the manual steps; usage errors exit 2" {
   run bash "$FETCH" sketchfab:abc123
   [ "$status" -eq 1 ]
