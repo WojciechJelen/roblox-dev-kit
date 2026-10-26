@@ -106,6 +106,15 @@ use `--reopen` to launch it again. Never bypass this guard with a separate OS la
 Keep source-code edits in the worktree's files so Rojo does not overwrite them. Studio content
 edits belong to this worker's local place; save it before closing.
 
+## Verify access before starting the task
+
+Resource creation and Studio binding do not prove asset access. Before editing models, follow
+[references/access.md](references/access.md): check the task's local dependencies, Studio account
+and runtime asset loads, and credentials only for operations the task needs. Record the results in
+`access-check.json` inside the environment directory. Treat the worker as ready only when every
+required check passes; report any failed or unverified item explicitly. `prepared` in the helper's
+manifest means its files were created, not that these runtime checks passed.
+
 ## Model and review loop
 
 Run reusable project scripts in a separate headless Blender process:

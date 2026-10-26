@@ -290,7 +290,7 @@ def load(value):
 
 
 def fingerprint(pid):
-    result = subprocess.run(["ps", "-p", str(pid), "-o", "lstart=", "-o", "command="],
+    result = subprocess.run(["ps", "-ww", "-p", str(pid), "-o", "lstart=", "-o", "command="],
                             text=True, capture_output=True)
     return result.stdout.strip() if result.returncode == 0 else ""
 
@@ -387,6 +387,7 @@ def start(env, args):
                                  stdout=output, stderr=output, start_new_session=True)
     try:
         deadline = time.monotonic() + args.timeout
+        last_probe = "no handshake received"
         while time.monotonic() < deadline:
             if child.poll() is not None:
                 raise EnvironmentError("Rojo exited; inspect logs/rojo.log")
@@ -399,10 +400,13 @@ def start(env, args):
                                                    "session_id": info["sessionId"]}
                         env["studio"] = None
                         return
-            except (OSError, ValueError):
-                pass
+                    last_probe = "process identity does not contain the isolated project path"
+                else:
+                    last_probe = "handshake does not match the isolated project name/session"
+            except (OSError, ValueError) as error:
+                last_probe = str(error)
             time.sleep(0.1)
-        raise EnvironmentError("Rojo did not become ready; inspect logs/rojo.log")
+        raise EnvironmentError(f"Rojo did not become ready ({last_probe}); inspect logs/rojo.log")
     except BaseException:
         if child.poll() is None:
             child.terminate()
@@ -436,7 +440,7 @@ def open_studio(env, args):
         return
     app = args.app or os.environ.get("RDK_STUDIO_APP", "/Applications/RobloxStudio.app")
     binary = str(Path(app) / "Contents/MacOS/RobloxStudio")
-    processes = run("ps", "-axo", "command=").splitlines()
+    processes = run("ps", "-ww", "-axo", "command=").splitlines()
     for command in processes:
         if (command.strip().startswith(binary + " ") and "-localPlaceFile" in command
                 and re.search(r"(?:^|\s)" + re.escape(env["place"]) + r"(?:$|\s)", command)):

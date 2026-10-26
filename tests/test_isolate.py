@@ -82,7 +82,11 @@ http.server.HTTPServer(('127.0.0.1', port), Handler).serve_forever()
         result = subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True,
                                 text=True, env=variables)
         if ok:
-            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            logs = ""
+            if result.returncode:
+                for path in self.root.glob("*/*/logs/rojo.log"):
+                    logs += f"\n{path}:\n{path.read_text()}"
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout + logs)
             return json.loads(result.stdout)
         return result
 
@@ -91,7 +95,7 @@ http.server.HTTPServer(('127.0.0.1', port), Handler).serve_forever()
                         "--place", str(self.place), "--cameras", str(self.camera), *extra)
 
     def start(self, env):
-        return self.cli("start", env["directory"], "--rojo", str(self.fake_rojo), "--timeout", "3")
+        return self.cli("start", env["directory"], "--rojo", str(self.fake_rojo))
 
     def bind(self, env, studio_id="studio-1", token=None, name=None, ok=True):
         listing = self.json(self.base / (studio_id + "-studios.json"), {"studios": [{
