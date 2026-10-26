@@ -7,11 +7,13 @@ Blender MCP servers, and a doctor that says exactly what is still missing. A thi
 from Blender into the game: it checks them against Roblox's limits, exports FBX with Roblox's
 settings and uploads them through Open Cloud. A fourth finds free assets before anyone builds them
 by hand, checks their licenses and scans free models for backdoor scripts.
+The `roblox-isolate` skill gives parallel workers separate Git, Studio, Rojo, Blender and review
+resources, with a verified Studio assignment for every agent.
 
 It is two things at once:
 
 - a **Claude Code plugin** named `roblox` (skills, `/roblox:setup`, `/roblox:doctor`,
-  `/roblox:find-resources`, and the Blender MCP server);
+  `/roblox:find-resources`, `/roblox:isolate`, and the Blender MCP server);
 - a set of portable **Agent Skills** in `skills/` that Codex CLI, pi and Oh My Pi load from
   `~/.agents/skills/`.
 
@@ -25,6 +27,7 @@ The reasoning behind the stack is in [skills/roblox-setup/references/stack.md](s
 | `roblox-doctor` | Read-only checks of toolchain, project, Studio, Blender, MCP registration and Open Cloud credentials; `--json` for agents, `--fix` for safe fixes |
 | `blender-to-roblox` | Checks meshes against Roblox's limits (triangles, textures, n-gons, UVs, transforms, wheel names), renders previews, exports FBX with Roblox's documented settings, uploads assets through the Open Cloud Assets API and inserts them in Studio; works with a live Blender (Blender MCP) or headless |
 | `find-resources` | Finds free models, textures, sounds, music, icons, fonts and animations (Creator Store through Studio MCP, Poly Haven, ambientCG, Sketchfab, Kenney, Freesound and more), gates them on their license, downloads CC0 texture sets with a `CREDITS.md` entry, and scans free models for backdoor scripts |
+| `roblox-isolate` | Creates a worktree/branch, local place copy, dedicated Rojo port, verified Studio ID, private headless Blender resources and matching before/after review folders for each parallel agent |
 
 The agent decides which steps apply; shell scripts in each skill do the actual work, so every step
 can also be run by hand (each script has `--help`, most have `--dry-run`).
@@ -109,7 +112,33 @@ folder is self-contained (it carries its own copy of the shared shell library).
 
 macOS (Linux works except for Roblox Studio), bash 3.2 or newer, git, curl, jq. Blender 5.1 or newer
 for the Blender steps; [uv](https://docs.astral.sh/uv/) for the Blender MCP server. Windows paths
-are stubs only.
+are stubs only. Isolated environments also need Python 3.9+ (standard library only).
+
+## Parallel agents with separate Studio instances
+
+Ask "use roblox-isolate to give each biome agent its own environment" or run `/roblox:isolate`.
+The skill assigns one manifest to each worker, so all file operations use its own worktree and all
+Studio tools use its verified `studio_id`. Creation can also be run directly:
+
+```sh
+python3 skills/roblox-isolate/scripts/environment.py create backyard \
+  --repo /path/to/game --place /path/to/saved-map.rbxl --cameras /path/to/cameras.json
+```
+
+The output contains the environment directory, branch, worktree, place copy and Rojo port. Run
+`start <environment-directory>` and `open-studio <environment-directory>` with the same script,
+connect that window's Rojo plugin to the returned port, then use the skill's MCP verification and
+`bind-studio` steps. Studio plugin connection is a UI step; launching a window alone is not treated
+as a ready environment. The source place must include the map—building only Rojo-managed code
+does not preserve Studio-only content.
+
+The [skill](skills/roblox-isolate/SKILL.md) explains worker handoff and the verification/model loop;
+its [reference](skills/roblox-isolate/references/environment.md) covers camera JSON and recovery.
+Workers run headless Blender with separate user/temp directories and keep review images at fixed
+camera positions. `stop` stops only the owned Rojo process, retaining branches, scenes and images.
+Git worktrees do not isolate cloud assets, account state or Studio's shared content folder: uploads
+and local asset sync still need coordination. Integrate shared source/manifest changes centrally;
+binary scenes and places require explicit content transfer.
 
 ## Finding free assets
 
@@ -183,12 +212,12 @@ embedded. Only mesh objects are checked and exported; convert curves, text and m
 ## Repository layout
 
 ```
-skills/            the product: roblox-setup/, roblox-doctor/, blender-to-roblox/, find-resources/ (SKILL.md, scripts/, references/, assets/)
+skills/            the product: roblox-setup/, roblox-doctor/, blender-to-roblox/, find-resources/, roblox-isolate/
 lib/common.sh      shared shell helpers; `make sync-lib` vendors it into each skill's scripts/lib/
 mcp/               servers.json (single description of both servers) and launch wrappers
 .claude-plugin/    Claude Code plugin and marketplace manifests
 .mcp.json          the Blender server bundled with the plugin
-commands/          /roblox:setup, /roblox:doctor and /roblox:find-resources
+commands/          /roblox:setup, /roblox:doctor, /roblox:find-resources and /roblox:isolate
 install/           install.sh / uninstall.sh for Codex, pi, Oh My Pi
 tests/             bats-core suites (fake HOME, no network unless RDK_NETWORK_TESTS=1)
 evals/             `claude plugin eval` cases (paid model runs; see Development)
@@ -215,6 +244,10 @@ make all          # check-sync, lint (shellcheck, JSON, py_compile), validate (s
   tests replay answers captured from the real APIs through a fake curl
   (`tests/fixtures/find-resources/`); its model-scanner tests use the real Lune and are skipped
   when Lune is not installed (`RDK_REAL_LUNE` picks the binary).
+- `python3 tests/fixtures/isolate_smoke.py --rojo /absolute/path/to/rojo --blender /absolute/path/to/Blender`
+  tests two real Rojo servers and two simultaneous headless Blender jobs in disposable projects.
+  It stops the servers and removes its fixtures afterwards; `--keep-running` retains them for
+  manual Studio/MCP verification. It never opens or modifies the user's game.
 - `evals/` holds `claude plugin eval` cases (`setup-empty-dir`, `doctor-missing-blender`,
   `adopt-existing`, `check-mesh-report`). They are real, billed model runs, so they are not part of
   `make all`; `scripts/validate-evals.sh` checks their structure instead. Run them with

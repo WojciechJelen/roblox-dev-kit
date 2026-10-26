@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `roblox-isolate` skill and `/roblox:isolate`: per-agent worktree/branch, saved local place copy,
+  locked Rojo port allocation and owned-process lifecycle, Studio ID binding verified through a
+  Rojo-synced marker, separate headless Blender resources, and immutable camera plans with paired
+  before/after image records. Lifecycle tests cover concurrent creation, wrong-instance rejection,
+  restart/stop, path escape, private Blender resources and review consistency.
 - `roblox-setup` skill: `install-toolchain.sh` (Rokit 1.2.0 plus the pinned toolchain, without
   editing shell profiles), `scaffold.sh` (strict-Luau Rojo template with services/controllers,
   Wally, StyLua, Selene, luau-lsp, CI, `AGENTS.md`), `adopt.sh` (existing scripts to Rojo with the
