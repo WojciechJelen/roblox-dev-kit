@@ -72,8 +72,10 @@ python3 "$SKILL_DIR/scripts/environment.py" open-studio "$ENV_DIR"
 ```
 
 `start` waits for the actual Rojo HTTP server; its log is in `logs/rojo.log`. `open-studio` opens
-the uniquely named local place in a new macOS Studio instance. Repeating it does not open duplicates;
-after deliberately closing that instance, use `--reopen` to launch it again.
+the uniquely named local place in a new macOS Studio instance. It tracks a waiting launcher through
+login/loading and also checks for a Studio process using that file. Repeating it (even with
+`--reopen`) does not start another while either is alive. After deliberately closing that instance,
+use `--reopen` to launch it again. Never bypass this guard with a separate OS launch command.
 
 1. Call `list_roblox_studios` and find the **exact local filename stem** from `manifest.place` in
    the returned name. Never choose by a shared cloud place ID, list order, or an old active-instance

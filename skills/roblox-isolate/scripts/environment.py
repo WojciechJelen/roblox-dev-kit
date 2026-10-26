@@ -217,7 +217,7 @@ def create(args):
         env = {"schema_version": 1, "id": token, "name": args.name, "root": str(root),
                "directory": str(directory), "request": request, "prepared": False,
                "worktree": str(worktree), "branch": branch, "base_revision": revision,
-               "place": str(local_place), "studio": None,
+               "place": str(local_place), "studio": None, "studio_launcher": None,
                "rojo": {"port": port, "project": str(served_project), "process": None},
                "review": str(directory / "review"), "blender": str(directory / "blender")}
         for name in ("studio", "review/before", "review/after", "blender", "tmp", "logs"):
@@ -297,6 +297,10 @@ def fingerprint(pid):
 
 def owned_process(env):
     process = env["rojo"]["process"]
+    return process_is_alive(process)
+
+
+def process_is_alive(process):
     return bool(process and fingerprint(process["pid"]) == process["fingerprint"])
 
 
@@ -426,12 +430,32 @@ def stop(env):
 def open_studio(env, args):
     if sys.platform != "darwin":
         raise EnvironmentError("automatic Studio launch requires macOS; open the manifest's place manually")
-    if env.get("studio_launch_requested") and not args.reopen:
+    if process_is_alive(env.get("studio_launcher")):
+        # open -W remains alive during login/loading and until the application exits.
+        # A missing MCP listing is not evidence that the previous launch failed.
         return
     app = args.app or os.environ.get("RDK_STUDIO_APP", "/Applications/RobloxStudio.app")
+    binary = str(Path(app) / "Contents/MacOS/RobloxStudio")
+    processes = run("ps", "-axo", "command=").splitlines()
+    for command in processes:
+        if (command.strip().startswith(binary + " ") and "-localPlaceFile" in command
+                and re.search(r"(?:^|\s)" + re.escape(env["place"]) + r"(?:$|\s)", command)):
+            return
+    if env.get("studio_launch_requested") and not args.reopen:
+        return
+    if env.get("studio_launch_requested") and not env.get("studio_launcher"):
+        raise EnvironmentError("previous Studio launch has no lifecycle record; inspect/close it before creating a new environment")
     # Pass the document to the new process, rather than a LaunchServices document-open event
     # that can be routed to another Studio when several instances start together.
-    run("open", "-n", "-a", app, "--args", "-task", "EditFile", "-localPlaceFile", env["place"])
+    command = ["open", "-n", "-W", "-a", app, "--args", "-task", "EditFile", "-localPlaceFile", env["place"]]
+    with (Path(env["directory"]) / "logs/studio-launch.log").open("ab") as output:
+        child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=output,
+                                 start_new_session=True)
+    # The launcher is deliberately kept alive by -W; persist it before returning to the agent.
+    identity = fingerprint(child.pid)
+    if not identity or child.poll() is not None:
+        raise EnvironmentError("Studio launcher exited; inspect logs/studio-launch.log before retrying")
+    env["studio_launcher"] = {"pid": child.pid, "fingerprint": identity}
     env["studio_launch_requested"] = True
     env["studio"] = None
 

@@ -10,6 +10,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "skills/roblox-isolate/scripts/environment.py"
@@ -232,6 +234,35 @@ http.server.HTTPServer(('127.0.0.1', port), Handler).serve_forever()
         stopped = self.cli("stop", env["directory"])
         self.assertIsNone(stopped["rojo"]["process"])
         self.assertTrue(ISOLATE.fingerprint(os.getpid()))
+
+    def test_studio_retry_during_login_reuses_launcher_even_with_reopen(self):
+        env = self.create()
+        args = SimpleNamespace(app="/Applications/RobloxStudio.app", reopen=False)
+        child = mock.Mock(pid=12345)
+        child.poll.return_value = None
+        with mock.patch.object(ISOLATE.sys, "platform", "darwin"), \
+                mock.patch.object(ISOLATE, "run", return_value=""), \
+                mock.patch.object(ISOLATE, "fingerprint", return_value="owned launcher identity"), \
+                mock.patch.object(ISOLATE.subprocess, "Popen", return_value=child) as launch:
+            ISOLATE.open_studio(env, args)
+            args.reopen = True
+            ISOLATE.open_studio(env, args)
+            self.assertEqual(launch.call_count, 1)
+            self.assertIn("-W", launch.call_args.args[0])
+            self.assertEqual(env["studio_launcher"]["pid"], 12345)
+
+    def test_studio_reopen_checks_file_process_if_launcher_was_lost(self):
+        env = self.create()
+        env["studio_launch_requested"] = True
+        env["studio_launcher"] = {"pid": 12345, "fingerprint": "previous identity"}
+        args = SimpleNamespace(app="/Applications/RobloxStudio.app", reopen=True)
+        running = "/Applications/RobloxStudio.app/Contents/MacOS/RobloxStudio -localPlaceFile " + env["place"]
+        with mock.patch.object(ISOLATE.sys, "platform", "darwin"), \
+                mock.patch.object(ISOLATE, "run", return_value=running), \
+                mock.patch.object(ISOLATE, "fingerprint", return_value=""), \
+                mock.patch.object(ISOLATE.subprocess, "Popen") as launch:
+            ISOLATE.open_studio(env, args)
+            launch.assert_not_called()
 
     def test_startup_failure_does_not_record_a_live_process(self):
         binary = self.base / "failed-rojo"

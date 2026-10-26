@@ -83,7 +83,10 @@ quality judgement is implied.
 - `start` is idempotent while its recorded process exists. `stop` checks PID, start time and command
   before signalling; a stale/reused PID is not killed. Restarting Rojo clears the Studio binding,
   so reconnect the plugin and reverify it. Stop retains all review and authoring files.
-- `open-studio` records only that an OS launch was requested. The local filename must appear in
+- `open-studio` records its `open -W` launcher PID/start identity and also checks Studio processes
+  for the exact local file path. Repeated calls, including `--reopen`, do not launch another while
+  either remains alive—even during login/loading before MCP discovery. This is launch ownership,
+  not a ready-state claim. The local filename must appear in
   `list_roblox_studios`, the right Rojo port must be connected, and the marker proof must succeed
   before binding. If Studio kept a cloud name instead of the local filename, establish which local
   file is open via its UI and save/reopen the uniquely named local copy; do not bypass the filename
