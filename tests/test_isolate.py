@@ -50,7 +50,7 @@ class EnvironmentTests(unittest.TestCase):
                                           "look_at_position": [0, 0, 0]}]})
         self.fake_rojo = self.base / "fake-rojo"
         self.fake_rojo.write_text(f'''#!{sys.executable}
-import http.server, json, sys, uuid
+import http.server, json, socketserver, sys, uuid
 session = str(uuid.uuid4())
 project_name = json.load(open(sys.argv[2]))['name']
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -60,8 +60,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({{'sessionId': session, 'projectName': project_name}}).encode())
     def log_message(self, *args): pass
 port = int(sys.argv[sys.argv.index('--port') + 1])
-http.server.HTTPServer.allow_reuse_address = True
-http.server.HTTPServer(('127.0.0.1', port), Handler).serve_forever()
+# HTTPServer.server_bind does a reverse DNS lookup before listen(); macOS CI
+# can stall there for 30+ seconds. This fixture needs only a loopback TCP server.
+socketserver.TCPServer.allow_reuse_address = True
+socketserver.TCPServer(('127.0.0.1', port), Handler).serve_forever()
 ''')
         self.fake_rojo.chmod(0o755)
 
